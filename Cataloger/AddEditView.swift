@@ -228,6 +228,11 @@ struct AddEditView: View {
                     imgurService.errorMessage = ""
                 }))
             }
+            if items.errorMessage.isEmpty == false {
+                Text(items.errorMessage).font(.title).foregroundColor(.red).gesture(TapGesture().onEnded({ _ in
+                    items.errorMessage = ""
+                }))
+            }
             if !self.errorMessage.isEmpty {
                 Text(self.errorMessage).font(.title).foregroundColor(.red).gesture(TapGesture().onEnded({_ in
                     self.errorMessage = ""

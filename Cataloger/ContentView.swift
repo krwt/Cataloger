@@ -189,6 +189,11 @@ struct ContentView: View {
                 Text(self.imgurService.errorMessage).font(.title).foregroundColor(.red).gesture(TapGesture().onEnded({_ in
                                                                                                                         self.imgurService.errorMessage = ""}))
             }
+                if !self.items.errorMessage.isEmpty {
+                    //Text("Error Message Received").font(.title).foregroundColor(.red)
+                    Text(self.items.errorMessage).font(.title).foregroundColor(.red).gesture(TapGesture().onEnded({_ in
+                                                                                                                            self.items.errorMessage = ""}))
+                }
                 #if targetEnvironment(macCatalyst)
                 #else
                 if self.showImgurButtons{

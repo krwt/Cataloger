@@ -23,7 +23,7 @@ class Items:NSObject,ObservableObject{
     @Published var id = 0
     @Published var dataLoaded : Bool = false
     @Published var pendingUploads: [Item] = []
-    
+    @Published var errorMessage : String = ""
     func save(){
         guard let  rootDir = FileManager.default.url(forUbiquityContainerIdentifier: nil) else {return}
         let documentsDir = rootDir.appendingPathComponent("Documents")
@@ -38,6 +38,7 @@ class Items:NSObject,ObservableObject{
             try rewrite.write(to: dataDir, atomically: true, encoding: .utf8)
         } catch {
             print("error writing to file : \(error)")
+            self.errorMessage = "**error writing saved to file**"
         }
     }
     
@@ -54,6 +55,7 @@ class Items:NSObject,ObservableObject{
             try line.appendLineToURL(fileURL: dataDir)
         } catch {
             print("error appending to file \(error)")
+            self.errorMessage = "**error updating new entry to file**"
         }
     }
     
