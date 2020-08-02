@@ -79,6 +79,9 @@ struct AddEditView: View {
                             return
                         }
                         
+                        itemToAddEdit.name = itemToAddEdit.name.replacingOccurrences(of: ",", with: ".")
+                        itemToAddEdit.description = itemToAddEdit.description.replacingOccurrences(of: ",", with: ".")
+                        itemToAddEdit.fullLocation = itemToAddEdit.fullLocation.replacingOccurrences(of: ",", with: ".")
                         
                         itemToAddEdit.imgUrl = URL(string: imgurService.uploadedImageUrlString)
                         imgurService.uploadedImageUrlString = ""

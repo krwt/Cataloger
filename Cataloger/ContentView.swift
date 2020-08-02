@@ -145,6 +145,10 @@ struct ContentView: View {
                     if selectedItem != items.fullList[selectedItem.id] {
                         print("edit did change entry")
                         selectedItem.description = selectedItem.description.replacingOccurrences(of: "\n", with: "||")
+                        selectedItem.description = selectedItem.description.replacingOccurrences(of: ",", with: ".")
+                        selectedItem.name = selectedItem.name.replacingOccurrences(of: ",", with: ".")
+                        selectedItem.fullLocation = selectedItem.fullLocation.replacingOccurrences(of: ",", with: ".")
+                        
                         items.fullList[selectedItem.id] = selectedItem
                         items.save()
                     } else {
@@ -163,6 +167,9 @@ struct ContentView: View {
                     items.id += 1
                     selectedItem.id = items.id
                     selectedItem.description = selectedItem.description.replacingOccurrences(of: "\n", with: "||")
+                    selectedItem.description = selectedItem.description.replacingOccurrences(of: ",", with: ".")
+                    selectedItem.fullLocation = selectedItem.fullLocation.replacingOccurrences(of: ",", with: ".")
+                    selectedItem.name = selectedItem.name.replacingOccurrences(of: ",", with: ".")
                     items.fullList.append(selectedItem)
                     items.update()
                     print("current list : \(items.fullList)")
