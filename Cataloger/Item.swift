@@ -13,7 +13,7 @@ struct Item: Hashable,Codable,Identifiable{
     var name : String = ""
     var description: String = ""
     //var location: String = ""
-    var fullLocation: String = ""
+    var fullLocation: String = "TBD"
     var imgUrl : URL?
     var uuid : String = ""
 }

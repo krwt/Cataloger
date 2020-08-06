@@ -20,6 +20,8 @@ struct ItemRow: View {
             }
             Divider()
             Text(item.description)
+            Divider()
+            Text(item.fullLocation)
             Spacer()
             //Image(systemName: "photo").scaledToFill().frame(width: 50, height: 50, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/).imageScale(.large)
         }.frame(height:70)

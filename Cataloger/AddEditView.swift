@@ -178,8 +178,10 @@ struct AddEditView: View {
                 #else
                 TextEditor(text: $itemToAddEdit.description).frame(height:100).border(Color.gray, width: /*@START_MENU_TOKEN@*/1/*@END_MENU_TOKEN@*/)
                 #endif
-                Text("container").foregroundColor(.gray).font(.caption)
-                TextField("Container", text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle())
+                Text("container (default: TBD)").foregroundColor(.gray).font(.caption)
+                TextField("Container", text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle()).onTapGesture {
+                    itemToAddEdit.fullLocation = ""
+                }
                 Text("image").foregroundColor(.gray)
                 ZStack{
                     if let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)  {

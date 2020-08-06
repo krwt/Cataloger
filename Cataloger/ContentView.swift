@@ -85,7 +85,9 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        if (!(searchTerm.lowercased().contains("name:")) && (each.name.lowercased().contains(searchTerm.lowercased()) || each.description.lowercased().contains(searchTerm.lowercased()))) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())){
+                        if (!(searchTerm.lowercased().contains("name:")) && (each.name.lowercased().contains(searchTerm.lowercased()) || each.description.lowercased().contains(searchTerm.lowercased()))) || (
+                            each.fullLocation.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of: "container:", with: ""))
+                        ) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())){
                             HStack{
                                 ItemRow(item: each).gesture(TapGesture().onEnded({ _ in
                                 self.actionIsEditing = true
