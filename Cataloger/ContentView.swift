@@ -47,10 +47,17 @@ struct ContentView: View {
                     }.padding(.leading, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/).padding(.trailing, 5)
                     
                 }
-                ZStack{
-                    TextField("Search here...or use \"name:\"", text: $searchTerm).background(Color.gray.opacity(0.1).font(.largeTitle)).font(.largeTitle)
+                ZStack(alignment: .trailing){
+                    TextField("Search name: container: ", text: $searchTerm).background(Color.gray.opacity(0.1).font(.title))
                     if items.dataLoaded == false {
                         Text("Loading Data.........").font(.title).background(Color.blue).opacity(1)
+                    }
+                    if self.searchTerm.isEmpty == false{
+                        Button() {
+                            self.searchTerm = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill").font(Font.system(size: 26))
+                        }.padding(.trailing,5)
                     }
                 }
                     
