@@ -16,6 +16,7 @@ struct Item: Hashable,Codable,Identifiable{
     var fullLocation: String = "TBD"
     var imgUrl : URL?
     var uuid : String = ""
+    var uuidForLabel : String = ""
 }
 
 class Items:NSObject,ObservableObject{
@@ -31,7 +32,7 @@ class Items:NSObject,ObservableObject{
         var rewrite = ""
         for each in self.fullList{
             let url = each.imgUrl?.absoluteString ?? ""
-            let line = each.name+","+each.description+","+each.fullLocation+","+url+","+each.uuid+"\n"
+            let line = each.name+","+each.description+","+each.fullLocation+","+url+","+each.uuid+","+each.uuidForLabel+"\n"
             rewrite.append(line)
         }
         do {
@@ -49,7 +50,7 @@ class Items:NSObject,ObservableObject{
         let each = self.fullList[self.id-1]
         let url = each.imgUrl?.absoluteString ?? ""
         let uuid = each.uuid
-        let line = each.name+","+each.description+","+each.fullLocation+","+url+","+uuid
+        let line = each.name+","+each.description+","+each.fullLocation+","+url+","+uuid+","+each.uuidForLabel
         
         do {
             try line.appendLineToURL(fileURL: dataDir)
@@ -122,7 +123,11 @@ class Items:NSObject,ObservableObject{
                     //location.removeFirst()
                     let imgurUrl = components[3].replacingOccurrences(of: " ", with: "")
                     let uuid = components[4]
-                    let newRow = Item(id: currentId, name: name, description: description, fullLocation: fullLocation, imgUrl: URL(string: imgurUrl),uuid:uuid)
+                    var newRow = Item(id: currentId, name: name, description: description, fullLocation: fullLocation, imgUrl: URL(string: imgurUrl),uuid:uuid)
+                    if components.count == 6{
+                        let uuidForLabel = components[5]
+                        newRow.uuidForLabel = uuidForLabel
+                    }
                     self.fullList.append(newRow)
                     self.id += 1
                 }

@@ -23,9 +23,27 @@ struct ContentView: View {
     @State var selectedItem : Item = Item()
     @State var showImgurButtons  = false
     @State var previewImageUrlString = ""
+    @State var showQRScanner : Bool = false
+    @State var FoundQRString : String = ""
     var body: some View {
         ZStack{
+            
         VStack{
+            ZStack{
+                if showQRScanner {
+                    QRScannerView().found(r: { (scannedString) in
+                        showQRScanner = false
+                        searchTerm = scannedString
+                    }).torchLight(isOn: false).interval(delay: 1.0)}
+                    
+                if showQRScanner{
+                    Button {
+                        showQRScanner = false
+                    } label: {
+                        Text("Cancel").foregroundColor(.red).background(Color.white).font(.largeTitle)
+                    }
+                }
+            }
             HStack{
                 VStack{
 //                    Button("Imgur") {
@@ -58,6 +76,13 @@ struct ContentView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill").font(Font.system(size: 26))
                         }.padding(.trailing,5)
+                    } else {
+                        Button {
+                            self.showQRScanner = true
+                        } label: {
+                            Image(systemName: "camera").font(Font.system(size:26))
+                        }
+
                     }
                 }
                     
@@ -94,7 +119,7 @@ struct ContentView: View {
                     } else {
                         if (!(searchTerm.lowercased().contains("name:")) && (each.name.lowercased().contains(searchTerm.lowercased()) || each.description.lowercased().contains(searchTerm.lowercased()))) || (
                             each.fullLocation.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of: "container:", with: ""))
-                        ) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())){
+                        ) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())) || (each.uuidForLabel == searchTerm){
                             HStack{
                                 ItemRow(item: each).gesture(TapGesture().onEnded({ _ in
                                 self.actionIsEditing = true

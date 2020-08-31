@@ -24,6 +24,9 @@ struct AddEditView: View {
     @State var errorMessage : String = ""
     @State var editingImage : Bool = false
     @State var showDeleteConformation : Bool = false
+    @State var showQRReaderView : Bool = false
+    @State var QRFound : Bool = false
+    @State var FoundQRString : String = ""
     //@State var isUploading : Bool = false
     //@State var imageUploaded : Bool = false
     var itemsList = itemSampleList
@@ -118,6 +121,32 @@ struct AddEditView: View {
                 #endif
                 Text("container").foregroundColor(.gray).font(.caption)
                 TextField(itemToAddEdit.fullLocation, text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle())
+                HStack{
+                    if itemToAddEdit.uuidForLabel == "" {
+                        Text("Label: None").foregroundColor(.red)
+                    } else {
+                        Text("Label: " + itemToAddEdit.uuidForLabel).foregroundColor(.green)
+                    }
+                    Button {
+                        //scan qr code than return uuidForLabel
+                        self.showQRReaderView = true
+                    } label: {
+                        if itemToAddEdit.uuidForLabel == "" {
+                            Text("Add Label")
+                        } else {
+                            Text("Change Label")
+                        }
+                    }
+                    if itemToAddEdit.uuidForLabel != ""{
+                        Button {
+                            itemToAddEdit.uuidForLabel = ""
+                        } label: {
+                            Text("Remove").foregroundColor(.red)
+                        }
+
+                    }
+
+                }
                 Text("image").foregroundColor(.gray)
                 if !self.editingImage, let imageUrl = itemToAddEdit.imgUrl {
                     URLImageView(imageUrlString: imageUrl.absoluteString)
@@ -182,6 +211,24 @@ struct AddEditView: View {
                 TextField("Container", text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle()).onTapGesture {
                     itemToAddEdit.fullLocation = ""
                 }
+                HStack{
+                    if itemToAddEdit.uuidForLabel == "" {
+                        Text("Label: None").foregroundColor(.red)
+                    } else {
+                        Text("Label: " + itemToAddEdit.uuidForLabel).foregroundColor(.green)
+                    }
+                    Button {
+                        //scan qr code than return uuidForLabel
+                        self.showQRReaderView = true
+                    } label: {
+                        if itemToAddEdit.uuidForLabel == "" {
+                            Text("Add Label")
+                        } else {
+                            Text("Change Label")
+                        }
+                    }
+
+                }
                 Text("image").foregroundColor(.gray)
                 ZStack{
                     if let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)  {
@@ -224,7 +271,42 @@ struct AddEditView: View {
                 CaptureImageView(isShown: $showCaptureImageView, image: $capturedImage
                 )
             }
-            
+            if showQRReaderView {
+                ZStack{
+                    QRScannerView().found(r: { labelUUID in
+                        FoundQRString = labelUUID
+                        QRFound = true
+                    //showQRReaderView = false
+                    }).torchLight(isOn:false).interval(delay: 1.0)
+                    if QRFound == false {
+                        Button {
+                            showQRReaderView = false
+                        } label: {
+                            Text("Cancel").foregroundColor(.blue).background(Color.white).font(.largeTitle)
+                        }
+                    } else {
+                        VStack{
+                            Text(FoundQRString + " Found").foregroundColor(.green).background(Color.white).font(.largeTitle)
+                            Button {
+                                showQRReaderView = false
+                                itemToAddEdit.uuidForLabel = FoundQRString
+                                QRFound = false
+                                FoundQRString = ""
+                            } label: {
+                                Text("Confirm").foregroundColor(.blue).background(Color.white).font(.largeTitle)
+                            }
+                            Button {
+                                showQRReaderView = false
+                                QRFound = false
+                                FoundQRString = ""
+                            } label: {
+                                Text("cancel").foregroundColor(.red).background(Color.white).font(.largeTitle)
+                            }
+
+                        }
+                    }
+                }
+            }
             if imgurService.errorMessage.isEmpty == false {
                 Text(imgurService.errorMessage).font(.title).foregroundColor(.red).gesture(TapGesture().onEnded({ _ in
                     imgurService.errorMessage = ""

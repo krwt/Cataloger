@@ -27,6 +27,9 @@
 		94BF01BF24C1573D00319C89 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01BD24C1573D00319C89 /* LaunchScreen.storyboard */; };
 		94BF01CA24C1573D00319C89 /* CatalogerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01C924C1573D00319C89 /* CatalogerTests.swift */; };
 		94BF01D524C1573D00319C89 /* CatalogerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01D424C1573D00319C89 /* CatalogerUITests.swift */; };
+		94D0B48C24FC7D7200D4CEC6 /* QRScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94D0B48B24FC7D7200D4CEC6 /* QRScannerView.swift */; };
+		94D0B48F24FC83BE00D4CEC6 /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94D0B48E24FC83BE00D4CEC6 /* CameraPreview.swift */; };
+		94D0B49124FC83F100D4CEC6 /* QrCodeCameraDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94D0B49024FC83F100D4CEC6 /* QrCodeCameraDelegate.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -74,6 +77,9 @@
 		94BF01D424C1573D00319C89 /* CatalogerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogerUITests.swift; sourceTree = "<group>"; };
 		94BF01D624C1573D00319C89 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		94BF01E224C1575600319C89 /* Cataloger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Cataloger.entitlements; sourceTree = "<group>"; };
+		94D0B48B24FC7D7200D4CEC6 /* QRScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = QRScannerView.swift; path = Cataloger/QRHelper/QRScannerView.swift; sourceTree = SOURCE_ROOT; };
+		94D0B48E24FC83BE00D4CEC6 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = SOURCE_ROOT; };
+		94D0B49024FC83F100D4CEC6 /* QrCodeCameraDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QrCodeCameraDelegate.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,6 +140,7 @@
 		94BF01B124C1573C00319C89 /* Cataloger */ = {
 			isa = PBXGroup;
 			children = (
+				94D0B48D24FC838800D4CEC6 /* QRHelper */,
 				9421BA1D24CF9336004E81A0 /* URLImageView.swift */,
 				9421BA1F24CF937E004E81A0 /* URLImageData.swift */,
 				94BF01E224C1575600319C89 /* Cataloger.entitlements */,
@@ -181,6 +188,16 @@
 				94BF01D624C1573D00319C89 /* Info.plist */,
 			);
 			path = CatalogerUITests;
+			sourceTree = "<group>";
+		};
+		94D0B48D24FC838800D4CEC6 /* QRHelper */ = {
+			isa = PBXGroup;
+			children = (
+				94D0B48E24FC83BE00D4CEC6 /* CameraPreview.swift */,
+				94D0B49024FC83F100D4CEC6 /* QrCodeCameraDelegate.swift */,
+				94D0B48B24FC7D7200D4CEC6 /* QRScannerView.swift */,
+			);
+			path = QRHelper;
 			sourceTree = "<group>";
 		};
 		BA63FEB573CF2F6149B37675 /* Pods */ = {
@@ -327,13 +344,16 @@
 				948DB96D24C5505A008937F6 /* ImgurService.swift in Sources */,
 				9421BA0F24CA65C2004E81A0 /* iCloudAlert.swift in Sources */,
 				94A4B89124C63576004BF882 /* ItemRow.swift in Sources */,
+				94D0B48C24FC7D7200D4CEC6 /* QRScannerView.swift in Sources */,
 				94BF01B524C1573C00319C89 /* SceneDelegate.swift in Sources */,
 				9421BA1124CA89AC004E81A0 /* FileAppendHelper.swift in Sources */,
 				94A4B89324C63818004BF882 /* Item.swift in Sources */,
 				941993DD24D122AF00D11269 /* HEICHelper.swift in Sources */,
+				94D0B48F24FC83BE00D4CEC6 /* CameraPreview.swift in Sources */,
 				9421BA2024CF937E004E81A0 /* URLImageData.swift in Sources */,
 				9421BA1724CABA0F004E81A0 /* Coordinator.swift in Sources */,
 				94A4B89524C7B17A004BF882 /* ItemSamples.swift in Sources */,
+				94D0B49124FC83F100D4CEC6 /* QrCodeCameraDelegate.swift in Sources */,
 				9421BA0D24CA0AA0004E81A0 /* AddEditView.swift in Sources */,
 				94BF01B724C1573C00319C89 /* ContentView.swift in Sources */,
 			);
