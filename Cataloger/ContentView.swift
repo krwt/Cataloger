@@ -119,7 +119,7 @@ struct ContentView: View {
                     } else {
                         if (!(searchTerm.lowercased().contains("name:")) && (each.name.lowercased().contains(searchTerm.lowercased()) || each.description.lowercased().contains(searchTerm.lowercased()))) || (
                             each.fullLocation.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of: "container:", with: ""))
-                        ) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())) || (each.uuidForLabel == searchTerm){
+                        ) || ( each.name.lowercased().contains(searchTerm.lowercased().replacingOccurrences(of:"name:",with:"").lowercased())) || (each.uuidForLabel.contains(searchTerm.uppercased()))     {
                             HStack{
                                 ItemRow(item: each).gesture(TapGesture().onEnded({ _ in
                                 self.actionIsEditing = true
