@@ -24,7 +24,7 @@ struct ItemRow: View {
             Text(item.fullLocation)
             Spacer()
             //Image(systemName: "photo").scaledToFill().frame(width: 50, height: 50, alignment: /*@START_MENU_TOKEN@*/.center/*@END_MENU_TOKEN@*/).imageScale(.large)
-        }.frame(height:70)
+        }.frame(height:70)//.border(Color.green,width:1)
     }
 }
 

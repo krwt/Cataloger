@@ -16,7 +16,7 @@ struct ContentView: View {
     @ObservedObject var imgurService : ImgurService
     @ObservedObject var items: Items
     @State var searchTerm : String = ""
-    @State var showAlert : Bool = true
+    @State var showAlert : Bool = false
     @State var showAddEditSheet = false
     @State var actionIsEditing = false
     @State var sheetToShow = true
@@ -25,6 +25,7 @@ struct ContentView: View {
     @State var previewImageUrlString = ""
     @State var showQRScanner : Bool = false
     @State var FoundQRString : String = ""
+    @State var addModeContainerMemory : String = "TBD" //remember last used container when in sequence adding mode
     var body: some View {
         ZStack{
             
@@ -94,10 +95,12 @@ struct ContentView: View {
                 }.padding(.trailing, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/)
             }.padding()
             List{
-                ForEach(items.fullList){
+                //reversed so newest show on top
+                ForEach(items.fullList.reversed()){
                     each in
                     if searchTerm == "" {
                         HStack{
+                            /*
                             ItemRow(item: each).gesture(TapGesture().onEnded({ _ in
                                     self.actionIsEditing = true
                                     print("editing mode")
@@ -106,15 +109,35 @@ struct ContentView: View {
                                     self.sheetToShow = true
                                     self.showAddEditSheet = true
                             }))
-                            Spacer()
+                            */
+                            //Spacer()
+                            HStack{
+                                ItemRow(item: each)
+                                Spacer()
+                            }.contentShape(Rectangle()).gesture(TapGesture().onEnded({ _ in
+                                self.actionIsEditing = true
+                                print("editing mode")
+                                self.selectedItem = each
+                                print(self.selectedItem)
+                                self.sheetToShow = true
+                                self.showAddEditSheet = true
+                            }))
+                            
+                            if let imageUrl = each.imgUrl {
+                                Image(systemName: "photo").gesture(TapGesture().onEnded({ _ in
+                                    self.previewImageUrlString = imageUrl.absoluteString
+                                    print("PreviewButtonTapped")
+                                })).foregroundColor(.green).frame(maxWidth:40)//.border(Color.blue, width: 1)
+                            }
+                            /*
                             if let imageUrl = each.imgUrl {
                                 Button(action: {
                                     self.previewImageUrlString = imageUrl.absoluteString
                                     print("PreviewButtonTapped")
                                 }, label: {
                                     Image(systemName: "photo")
-                                })
-                            }
+                                }).foregroundColor(.green).frame(maxWidth:40).border(Color.blue, width: 1)
+                            }*/
                         }
                     } else {
                         if (!(searchTerm.lowercased().contains("name:")) && (each.name.lowercased().contains(searchTerm.lowercased()) || each.description.lowercased().contains(searchTerm.lowercased()))) || (
@@ -213,7 +236,7 @@ struct ContentView: View {
             if showAlert {
                 iCloudAlert(showAlert: $showAlert,sheetToShow: $sheetToShow)
             } else {
-                AddEditView(items:items, isEditing: $actionIsEditing, itemToAddEdit: $selectedItem, imgurService: imgurService, selfIsShowing: $showAddEditSheet, sheetToShow: $sheetToShow).environmentObject(items).environmentObject(imgurService)
+                AddEditView(items:items, isEditing: $actionIsEditing, itemToAddEdit: $selectedItem, containerNameforAdding: $addModeContainerMemory, imgurService: imgurService, selfIsShowing: $showAddEditSheet, sheetToShow: $sheetToShow).environmentObject(items).environmentObject(imgurService)
             }//sheet end
             
         }//end primary VStack in ZStack

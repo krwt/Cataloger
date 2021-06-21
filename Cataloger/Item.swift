@@ -21,7 +21,7 @@ struct Item: Hashable,Codable,Identifiable{
 
 class Items:NSObject,ObservableObject{
     @Published var fullList: [Item] = []
-    @Published var id = 0
+    @Published var id = 0 //i guess this is meant to be count?
     @Published var dataLoaded : Bool = false
     @Published var pendingUploads: [Item] = []
     @Published var errorMessage : String = ""
@@ -136,6 +136,33 @@ class Items:NSObject,ObservableObject{
             }
         } else {
             print("no data file found on cloud")
+            //start download file to icloud
+            let ghosturl = documentsDir.appendingPathComponent(".data.mcs.icloud")
+            
+            
+            if FileManager.default.fileExists(atPath: ghosturl.path){
+                print("file ghost exist")
+                do {
+                  try FileManager.default.startDownloadingUbiquitousItem(at: ghosturl )
+                } catch {
+                  print("Unexpected error: \(error).")
+                }
+            }
+            else {
+                print("file ghost does not exist")
+            }
+            /*
+            let fileManager = FileManager.default
+            if let urls = try? fileManager.contentsOfDirectory(at: documentsDir, includingPropertiesForKeys: nil, options: [])
+            {  // Here select the file url you are interested in
+                    if let myURL = urls.first {
+                // We have the url we want to download into myURL variable
+                    }
+                for each in urls {
+                    print(each)
+                }
+            }
+            */
             return
         }
         for each in fullList {

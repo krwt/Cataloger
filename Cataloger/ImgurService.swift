@@ -72,12 +72,13 @@ class ImgurService: NSObject, ObservableObject {
     let clientId = "2691de281566831"
     let clientSecret = "e1d9287a72373e861a1d284bec883360eae8257b"
     let callBackUrl = "cataloger"
+    let requestUrlString = "https://api.imgur.com/oauth2/authorize?client_id="+"2691de281566831"+"&response_type=token&state=login"
     @Published var showSheet: Bool = false
     @Published var accessToken: String?
         = UserDefaults.standard.string(forKey: "accessToken")
     @Published var refreshToken: String?
         = UserDefaults.standard.string(forKey: "refreshToken")
-    @Published var requestUrl : URL?
+    @Published var requestUrl : URL? = URL(string: "https://api.imgur.com/oauth2/authorize?client_id="+"2691de281566831"+"&response_type=token&state=login")
     @Published var loggedIn : Bool = false
     @Published var userName : String?  = UserDefaults.standard.string(forKey: "userName")
     @Published var buttonEnabled : Bool = false
@@ -106,8 +107,8 @@ class ImgurService: NSObject, ObservableObject {
     
     func logIn(){
         self.showSheet = true
-        let requestUrlString = "https://api.imgur.com/oauth2/authorize?client_id="+clientId+"&response_type=token&state=login"
-        requestUrl = URL(string: requestUrlString)
+        //let requestUrlString = "https://api.imgur.com/oauth2/authorize?client_id="+clientId+"&response_type=token&state=login"
+        //requestUrl = URL(string: requestUrlString)
         callBackNotificationObserver = NotificationCenter.default.addObserver(forName: .imgurCallBack, object: nil, queue: .main, using: { (notification) in
             
             guard let url = notification.object as? URL else {return}

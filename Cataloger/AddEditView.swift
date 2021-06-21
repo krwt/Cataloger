@@ -12,6 +12,7 @@ struct AddEditView: View {
     @ObservedObject var items : Items
     @Binding var isEditing : Bool
     @Binding var itemToAddEdit : Item
+    @Binding var containerNameforAdding : String
     @ObservedObject var imgurService : ImgurService
     //@State var name: String = ""
     //@State var desc: String = ""
@@ -85,7 +86,7 @@ struct AddEditView: View {
                         itemToAddEdit.name = itemToAddEdit.name.replacingOccurrences(of: ",", with: ".")
                         itemToAddEdit.description = itemToAddEdit.description.replacingOccurrences(of: ",", with: ".")
                         itemToAddEdit.fullLocation = itemToAddEdit.fullLocation.replacingOccurrences(of: ",", with: ".")
-                        
+                        containerNameforAdding = itemToAddEdit.fullLocation
                         itemToAddEdit.imgUrl = URL(string: imgurService.uploadedImageUrlString)
                         imgurService.uploadedImageUrlString = ""
                         itemToAddEdit.id = items.id
@@ -96,6 +97,7 @@ struct AddEditView: View {
                         items.saveHEICtoiCloud(image: capturedImage, uuid: itemToAddEdit.uuid)
                         items.update()
                         itemToAddEdit = Item()
+                        itemToAddEdit.fullLocation = containerNameforAdding
                         capturedImage = nil
                     } else {
                         print("edit mode ended")
@@ -167,13 +169,15 @@ struct AddEditView: View {
                     
                 } else {
                     ZStack{
-                        if let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)  {
+                        let image = Image(
+                            uiImage:capturedImage ?? UIImage(systemName: "photo")!
+                        )
                                 image.resizable().scaledToFit().gesture(TapGesture().onEnded({ (_) in
                                         showCaptureImageView.toggle()
                                     imgurService.imageUploaded = false
                                     }))
-                            }
-                        if let capturedImage = capturedImage, let _ =  Image(uiImage: capturedImage) {
+                            
+                        if let capturedImage = capturedImage /*, let _ =  Image(uiImage: capturedImage)*/ {
                             Button(action: {
                                 if imgurService.imageUploaded || imgurService.uploading{
                                     return
@@ -200,7 +204,7 @@ struct AddEditView: View {
                 }
             } else {
                 Text("Name").foregroundColor(.gray).font(.caption)
-                TextField("Name", text: $itemToAddEdit.name).textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("Name", text: $itemToAddEdit.name)  .textFieldStyle(RoundedBorderTextFieldStyle())
                 Text("Description").foregroundColor(.gray).font(.caption)
                 #if targetEnvironment(macCatalyst)
                 TextField(itemToAddEdit.description, text: $itemToAddEdit.description)
@@ -208,9 +212,14 @@ struct AddEditView: View {
                 TextEditor(text: $itemToAddEdit.description).frame(height:100).border(Color.gray, width: /*@START_MENU_TOKEN@*/1/*@END_MENU_TOKEN@*/)
                 #endif
                 Text("container (default: TBD)").foregroundColor(.gray).font(.caption)
+            
                 TextField("Container", text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle()).onTapGesture {
                     itemToAddEdit.fullLocation = ""
-                }
+                 }
+                 
+
+            
+                
                 HStack{
                     if itemToAddEdit.uuidForLabel == "" {
                         Text("Label: None").foregroundColor(.red)
@@ -231,13 +240,13 @@ struct AddEditView: View {
                 }
                 Text("image").foregroundColor(.gray)
                 ZStack{
-                    if let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)  {
+                    let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)
                             image.resizable().scaledToFit().gesture(TapGesture().onEnded({ (_) in
                                     showCaptureImageView.toggle()
                                 imgurService.imageUploaded = false
                                 }))
-                        }
-                    if let capturedImage = capturedImage, let _ =  Image(uiImage: capturedImage) {
+                    
+                    if let capturedImage = capturedImage /*, let _ =  Image(uiImage: capturedImage) */{
                         Button(action: {
                             if imgurService.imageUploaded || imgurService.uploading{
                                 return
@@ -332,6 +341,6 @@ struct AddEditView: View {
 struct AddEditView_Previews: PreviewProvider {
     static var previews: some View {
         //AddEditView(isEditing: true,name: itemSampleList[0].name,desc: itemSampleList[0].description,location: itemSampleList[0].location)
-        AddEditView(items: Items(),isEditing: .constant(false), itemToAddEdit: .constant(Item()), imgurService: ImgurService(),selfIsShowing: .constant(true),sheetToShow : .constant(true))
+        AddEditView(items: Items(),isEditing: .constant(false), itemToAddEdit: .constant(Item()), containerNameforAdding: .constant("TBD"), imgurService: ImgurService(),selfIsShowing: .constant(true),sheetToShow : .constant(true))
     }
 }
