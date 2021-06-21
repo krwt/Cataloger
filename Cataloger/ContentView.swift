@@ -94,7 +94,8 @@ struct ContentView: View {
                 }.padding(.trailing, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/)
             }.padding()
             List{
-                ForEach(items.fullList){
+                //reversed so newest show on top
+                ForEach(items.fullList.reversed()){
                     each in
                     if searchTerm == "" {
                         HStack{

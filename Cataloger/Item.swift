@@ -21,7 +21,7 @@ struct Item: Hashable,Codable,Identifiable{
 
 class Items:NSObject,ObservableObject{
     @Published var fullList: [Item] = []
-    @Published var id = 0
+    @Published var id = 0 //i guess this is meant to be count?
     @Published var dataLoaded : Bool = false
     @Published var pendingUploads: [Item] = []
     @Published var errorMessage : String = ""
