@@ -15,8 +15,8 @@ struct Item: Hashable,Codable,Identifiable{
     //var location: String = ""
     var fullLocation: String = "TBD"
     var imgUrl : URL?
-    var uuid : String = ""
-    var uuidForLabel : String = ""
+    var uuid : String = "" //this is for saved image
+    var uuidForLabel : String = "" // this is for qr label
 }
 
 class Items:NSObject,ObservableObject{

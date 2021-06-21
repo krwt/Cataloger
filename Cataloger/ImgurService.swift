@@ -234,7 +234,8 @@ class ImgurService: NSObject, ObservableObject {
             }, receiveValue: { receivedValue in
                 print("upload receveid" )
                 print("\(receivedValue)")
-                guard let uploadResult : uploadResponse = receivedValue,
+                //guard let uploadResult : uploadResponse = receivedValue,
+                guard let uploadResult = receivedValue as uploadResponse?,
                       let success = uploadResult.success,
                       let data = uploadResult.data,
                       let urlString = data.link,
@@ -304,7 +305,9 @@ class ImgurService: NSObject, ObservableObject {
             }, receiveValue: { receivedValue in
                 print("newAlbumSink receveid" )
                 print("\(receivedValue)")
-                guard let newAlbumResult : newAlbumResponse = receivedValue,
+                //guard let newAlbumResult: newAlbumResponse
+                //        = receivedValue,
+                guard let newAlbumResult = receivedValue as newAlbumResponse?,
                       let success = newAlbumResult.success,
                       let data = newAlbumResult.data,
                       let albumId = data.id,
