@@ -12,7 +12,7 @@ struct AddEditView: View {
     @ObservedObject var items : Items
     @Binding var isEditing : Bool
     @Binding var itemToAddEdit : Item
-    @Binding var containerNameforAdding : String
+    @Binding var containerNameforAdding : String //remmeber container name when adding multiple items
     @ObservedObject var imgurService : ImgurService
     //@State var name: String = ""
     //@State var desc: String = ""
