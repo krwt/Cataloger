@@ -9,7 +9,7 @@
 import UIKit
 import SwiftUI
 
-
+@available(iOS 17.0, *)
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?

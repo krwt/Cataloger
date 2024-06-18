@@ -8,6 +8,7 @@
 
 import SwiftUI
 
+@available(iOS 17.0, *)
 struct AddEditView: View {
     @ObservedObject var items : Items
     @Binding var isEditing : Bool
@@ -28,6 +29,12 @@ struct AddEditView: View {
     @State var showQRReaderView : Bool = false
     @State var QRFound : Bool = false
     @State var FoundQRString : String = ""
+    @FocusState var nameFieldFocused: Bool
+    @FocusState var descroptionFieldFocused: Bool
+    @FocusState var containerFieldFocused: Bool
+    @FocusState var UUIDButtonFocused:Bool
+    @FocusState var ImageButtonFocused:Bool
+    @FocusState var addSaveButtonFocused: Bool
     //@State var isUploading : Bool = false
     //@State var imageUploaded : Bool = false
     var itemsList = itemSampleList
@@ -99,6 +106,10 @@ struct AddEditView: View {
                         itemToAddEdit = Item()
                         itemToAddEdit.fullLocation = containerNameforAdding
                         capturedImage = nil
+                        self.containerFieldFocused = false
+                        self.descroptionFieldFocused = false
+                        self.nameFieldFocused = true
+                        print("name field is in focus \(self.nameFieldFocused)")
                     } else {
                         print("edit mode ended")
                         if let url = URL(string: imgurService.uploadedImageUrlString) {
@@ -108,7 +119,62 @@ struct AddEditView: View {
                         self.selfIsShowing = false
                         self.sheetToShow = false
                     }
-                }.padding(.trailing, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/)
+                }.padding(.trailing, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/).focusable().focused($addSaveButtonFocused).border(Color.blue, width: addSaveButtonFocused ? 2 : 0).onKeyPress(.space) {
+                    print("Add/Save Button space keybaord triggered")
+                    if self.capturedImage != nil && !imgurService.imageUploaded{
+                        //uploading in progress, cancel action
+                        self.errorMessage = "uploading in progress please wait"
+                        return .handled
+                        
+                    }
+                    
+                    if self.isEditing == false {
+                        //Adding item
+                        print("adding one entry")
+                        print(" name of new item to add : \(itemToAddEdit.name)")
+                        if itemToAddEdit.name == "" {
+                            print("empty entry discarded ")
+                            return .handled
+                        }
+                        DispatchQueue.main.async {
+                            itemToAddEdit.name = itemToAddEdit.name.replacingOccurrences(of: ",", with: ".")
+                            itemToAddEdit.description = itemToAddEdit.description.replacingOccurrences(of: ",", with: ".")
+                            itemToAddEdit.fullLocation = itemToAddEdit.fullLocation.replacingOccurrences(of: ",", with: ".")
+                            containerNameforAdding = itemToAddEdit.fullLocation
+                            itemToAddEdit.imgUrl = URL(string: imgurService.uploadedImageUrlString)
+                            imgurService.uploadedImageUrlString = ""
+                            itemToAddEdit.id = items.id
+                            itemToAddEdit.uuid = UUID().uuidString
+                            itemToAddEdit.description = itemToAddEdit.description.replacingOccurrences(of: "\n", with: "||")
+                            
+                            items.fullList.append(itemToAddEdit)
+                            items.id += 1
+                            items.saveHEICtoiCloud(image: capturedImage, uuid: itemToAddEdit.uuid)
+                            items.update()
+                            itemToAddEdit = Item()
+                            itemToAddEdit.fullLocation = containerNameforAdding
+                            capturedImage = nil
+                            self.addSaveButtonFocused = false
+                            self.nameFieldFocused = true
+                        }
+                        return .handled
+                        //self.containerFieldFocused = false
+                        //self.descroptionFieldFocused = false
+                        //self.nameFieldFocused = true
+                        //print("name field is in focus \(self.nameFieldFocused)")
+                    } else {
+                        DispatchQueue.main.async {
+                            print("edit mode ended")
+                            if let url = URL(string: imgurService.uploadedImageUrlString) {
+                                itemToAddEdit.imgUrl = url
+                                imgurService.uploadedImageUrlString = ""
+                            }
+                            self.selfIsShowing = false
+                            self.sheetToShow = false
+                        }
+                        return .handled
+                    }
+                }
             }.padding(.bottom, 20)
             
             if isEditing {
@@ -116,11 +182,8 @@ struct AddEditView: View {
                 TextField(itemToAddEdit.name, text: $itemToAddEdit.name).textFieldStyle(RoundedBorderTextFieldStyle())
                 Text("Description").foregroundColor(.gray).font(.caption)
                 //TextField(itemSampleList[0].description.replacingOccurrences(of: ".", with: "\n"), text: $desc)
-                #if targetEnvironment(macCatalyst)
-                TextField(itemToAddEdit.description, text: $itemToAddEdit.description)
-                #else
+                
                 TextEditor(text: $itemToAddEdit.description).frame(height: 100, alignment: .center)
-                #endif
                 Text("container").foregroundColor(.gray).font(.caption)
                 TextField(itemToAddEdit.fullLocation, text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle())
                 HStack{
@@ -204,21 +267,48 @@ struct AddEditView: View {
                 }
             } else {
                 Text("Name").foregroundColor(.gray).font(.caption)
-                TextField("Name", text: $itemToAddEdit.name)  .textFieldStyle(RoundedBorderTextFieldStyle())
+                TextField("Name", text: $itemToAddEdit.name)  .textFieldStyle(RoundedBorderTextFieldStyle()).focused($nameFieldFocused).onAppear{
+                    //DispatchQueue.main.asyncAfter(deadline: .now() + 0.15){
+                        //self.descroptionFieldFocused = false
+                        //self.containerFieldFocused = false
+                        //self.nameFieldFocused = true
+                    //}
+                }.border(Color.blue, width: nameFieldFocused ? 2 : 0)
+                
+                
+                 
+
+            
                 Text("Description").foregroundColor(.gray).font(.caption)
-                #if targetEnvironment(macCatalyst)
-                TextField(itemToAddEdit.description, text: $itemToAddEdit.description)
-                #else
-                TextEditor(text: $itemToAddEdit.description).frame(height:100).border(Color.gray, width: /*@START_MENU_TOKEN@*/1/*@END_MENU_TOKEN@*/)
-                #endif
+                
+                TextEditor(text: $itemToAddEdit.description).frame(height:100).border(Color.gray, width: /*@START_MENU_TOKEN@*/1/*@END_MENU_TOKEN@*/).focused($descroptionFieldFocused).onChange(of: itemToAddEdit.description) { _ in
+                    print("new item descriptionfield edited")
+                    //print(itemToAddEdit.description.suffix(4))
+                    if itemToAddEdit.description.suffix(1)=="\t"{
+                        itemToAddEdit.description.removeLast()
+                        print("tab detected")
+                        //self.descroptionFieldFocused = false
+                        //self.containerFieldFocused = true
+                        print("is descriptionField in focus \(self.descroptionFieldFocused)")
+                        print("is containerField in focus \(self.containerFieldFocused)")
+                        
+                        descroptionFieldFocused = false
+                        //UUIDButtonFocused = true
+                        
+                    }
+                }.border(Color.blue, width: descroptionFieldFocused ? 2 : 0)
+                             
                 Text("container (default: TBD)").foregroundColor(.gray).font(.caption)
             
                 TextField("Container", text: $itemToAddEdit.fullLocation).textFieldStyle(RoundedBorderTextFieldStyle()).onTapGesture {
                     itemToAddEdit.fullLocation = ""
-                 }
-                 
-
-            
+                }.focused($containerFieldFocused).border(Color.blue, width: containerFieldFocused ? 2 : 0).onChange(of: itemToAddEdit.fullLocation) {
+                    if itemToAddEdit.fullLocation.prefix(3)=="TBD" && itemToAddEdit.fullLocation.count>3  {
+                        itemToAddEdit.fullLocation.removeFirst(3)
+                        print("first 3 is tbd")
+                    }
+                    itemToAddEdit.fullLocation=itemToAddEdit.fullLocation.uppercased()
+                }
                 
                 HStack{
                     if itemToAddEdit.uuidForLabel == "" {
@@ -235,17 +325,35 @@ struct AddEditView: View {
                         } else {
                             Text("Change Label")
                         }
-                    }
+                    }.focusable().focused($UUIDButtonFocused).border(Color.blue, width: UUIDButtonFocused ? 2 : 0).onKeyPress(.space) {
+                        self.showQRReaderView = true
+                        return .handled
+                    }//keyboardShortcut(.space, modifiers: [])
 
                 }
                 Text("image").foregroundColor(.gray)
                 ZStack{
+                    let _ = Self._printChanges()
+                    /*
                     let image = Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!)
                             image.resizable().scaledToFit().gesture(TapGesture().onEnded({ (_) in
                                     showCaptureImageView.toggle()
                                 imgurService.imageUploaded = false
-                                }))
+                            }))//.focusable().focused($ImageButtonFocused).border(Color.blue, width: ImageButtonFocused ? 2 : 0).keyboardShortcut(.space, modifiers: []).keyboardShortcut(.space, modifiers: [])
                     
+                    */
+                    Button {
+                        showCaptureImageView.toggle()
+                        imgurService.imageUploaded = false
+                    } label: {
+                        Image(uiImage:capturedImage ?? UIImage(systemName: "photo")!).resizable()
+                            .scaledToFit()
+                    }.focusable().focused($ImageButtonFocused).border(Color.blue, width: ImageButtonFocused ? 2 : 0).onKeyPress(.space) {
+                        showCaptureImageView.toggle()
+                        imgurService.imageUploaded = false
+                        return .handled
+                    }//keyboardShortcut(.space, modifiers: [])
+
                     if let capturedImage = capturedImage /*, let _ =  Image(uiImage: capturedImage) */{
                         Button(action: {
                             if imgurService.imageUploaded || imgurService.uploading{
@@ -274,7 +382,21 @@ struct AddEditView: View {
             
             
             //Spacer()
-        }.padding(.all, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/)//main VStack in ZStack End
+        }.padding(.all, /*@START_MENU_TOKEN@*/10/*@END_MENU_TOKEN@*/).onChange(of: descroptionFieldFocused) {
+            if descroptionFieldFocused == false{
+                print("descirption field no longer focused")
+                containerFieldFocused=true
+            }
+        }/*.onChange(of: UUIDButtonFocused) {
+            
+            if UUIDButtonFocused == false{
+                print("uuidbutton no longer focused")
+                ImageButtonFocused=true
+            }
+        }*/.onAppear{
+            nameFieldFocused = true
+        }
+            //main VStack in ZStack End
             
             if (showCaptureImageView) {
                 CaptureImageView(isShown: $showCaptureImageView, image: $capturedImage
@@ -337,7 +459,7 @@ struct AddEditView: View {
    
     
 }//class end
-
+@available(iOS 17.0, *)
 struct AddEditView_Previews: PreviewProvider {
     static var previews: some View {
         //AddEditView(isEditing: true,name: itemSampleList[0].name,desc: itemSampleList[0].description,location: itemSampleList[0].location)

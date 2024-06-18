@@ -155,11 +155,11 @@
 				9421BA1024CA89AC004E81A0 /* FileAppendHelper.swift */,
 				94A4B89224C63818004BF882 /* Item.swift */,
 				94A4B89424C7B17A004BF882 /* ItemSamples.swift */,
+				948DB96C24C5505A008937F6 /* ImgurService.swift */,
 				94BF01B824C1573D00319C89 /* Assets.xcassets */,
 				94BF01BD24C1573D00319C89 /* LaunchScreen.storyboard */,
 				94BF01C024C1573D00319C89 /* Info.plist */,
 				94BF01BA24C1573D00319C89 /* Preview Content */,
-				948DB96C24C5505A008937F6 /* ImgurService.swift */,
 			);
 			path = Cataloger;
 			sourceTree = "<group>";
@@ -524,7 +524,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Cataloger/Preview Content\"";
 				DEVELOPMENT_TEAM = Y9QBB3ZA77;
 				ENABLE_PREVIEWS = YES;
@@ -537,7 +537,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = im.maxim.catalogerApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -558,7 +558,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 6;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"Cataloger/Preview Content\"";
 				DEVELOPMENT_TEAM = Y9QBB3ZA77;
 				ENABLE_PREVIEWS = YES;
@@ -571,7 +571,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.3;
+				MARKETING_VERSION = 1.4;
 				PRODUCT_BUNDLE_IDENTIFIER = im.maxim.catalogerApp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

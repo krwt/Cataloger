@@ -109,12 +109,12 @@ class Items:NSObject,ObservableObject{
 //                    if splitData.firstIndex(of: each) == 0{
 //                        continue
 //                    }
-                    print("splitdata(line): \(each)")
+                    //print("splitdata(line): \(each)")
                     let components = each.components(separatedBy: ",")
                     if components.count < 5 {
                         continue
                     }
-                    print("components: \(components)")
+                    //print("components: \(components)")
                     let currentId = self.id
                     let name = components[0]
                     let description = components[1]
@@ -158,6 +158,7 @@ class Items:NSObject,ObservableObject{
                     if let myURL = urls.first {
                 // We have the url we want to download into myURL variable
                     }
+                
                 for each in urls {
                     print(each)
                 }
@@ -165,9 +166,11 @@ class Items:NSObject,ObservableObject{
             */
             return
         }
+        /*
         for each in fullList {
             print(each)
         }
+         */
         completion()
     }
     
