@@ -151,7 +151,7 @@ class ImgurService: NSObject, ObservableObject {
         var parameters = [
           [
             "key": "image",
-            "value": image.jpegData(compressionQuality: 0.01)?.base64EncodedString(options: .lineLength64Characters) ?? "",
+            "value": image.jpegData(compressionQuality: 0.8)?.base64EncodedString(options: .lineLength64Characters) ?? "",
             "type": "text"
           ],
           [
@@ -259,7 +259,7 @@ class ImgurService: NSObject, ObservableObject {
         }
     
     func getBase64Image(image: UIImage, complete: @escaping (String?) -> ()){
-        let imageData = image.jpegData(compressionQuality: 0.01)
+        let imageData = image.jpegData(compressionQuality: 0.8)
         let base64Jpeg = imageData?.base64EncodedString(options: .lineLength64Characters)
         complete(base64Jpeg)
     }

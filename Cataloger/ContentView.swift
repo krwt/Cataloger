@@ -221,17 +221,19 @@ struct ContentView: View {
                         return
                     }
                     
-                    if selectedItem != items.fullList[selectedItem.id] {
-                        print("edit did change entry")
-                        selectedItem.description = selectedItem.description.replacingOccurrences(of: "\n", with: "||")
-                        selectedItem.description = selectedItem.description.replacingOccurrences(of: ",", with: ".")
-                        selectedItem.name = selectedItem.name.replacingOccurrences(of: ",", with: ".")
-                        selectedItem.fullLocation = selectedItem.fullLocation.replacingOccurrences(of: ",", with: ".")
+                    if let idx = items.fullList.firstIndex(where: { $0.id == selectedItem.id }) {
+                        if selectedItem != items.fullList[idx] {
+                                print("edit did change entry")
+                            selectedItem.description = selectedItem.description.replacingOccurrences(of: "\n", with: "||")
+                            selectedItem.description = selectedItem.description.replacingOccurrences(of: ",", with: ".")
+                            selectedItem.name = selectedItem.name.replacingOccurrences(of: ",", with: ".")
+                            selectedItem.fullLocation = selectedItem.fullLocation.replacingOccurrences(of: ",", with: ".")
                         
-                        items.fullList[selectedItem.id] = selectedItem
-                        items.save()
+                            items.fullList[idx] = selectedItem
+                            items.save()
+                        } else {print("edit did not change entry" )}
                     } else {
-                        print("edit did not change entry" )
+                        print("Selected item not found in fullList; cannot compare or update.")
                     }
                 } else {
                     if selectedItem.name == "" {
@@ -252,6 +254,7 @@ struct ContentView: View {
                     items.fullList.append(selectedItem)
                     items.update()
                     print("current list : \(items.fullList)")
+                    items.reloadData()
                 }
             }
         }) {//onDismiss end sheet start

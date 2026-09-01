@@ -90,7 +90,7 @@ class Items:NSObject,ObservableObject{
         let documentsDir = rootDir.appendingPathComponent("Documents")
         let imgDir = documentsDir.appendingPathComponent("img")
         let fileUrl = imgDir.appendingPathComponent("\(uuid).heic")
-        let heicData = image.heic(compressionQuality: 0.15)
+        let heicData = image.heic(compressionQuality: 0.8)
         FileManager.default.createFile(atPath: fileUrl.path, contents: heicData, attributes: nil)
     }
     

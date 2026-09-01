@@ -53,6 +53,39 @@ struct QRScannerView: UIViewRepresentable {
     }
     
     func setupCamera(_ uiView: CameraPreview) {
+        var discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [
+                .builtInUltraWideCamera,
+                .builtInWideAngleCamera,
+                .builtInTelephotoCamera,
+            ],
+            mediaType: .video,
+            position: .back
+        )
+        print("Discovered cameras:")
+        for device in discoverySession.devices {
+            print("Device: \(device.localizedName), type: \(device.deviceType.rawValue)")
+        }
+        if #available(iOS 17.0, *) {
+             let discoverySession = AVCaptureDevice.DiscoverySession(
+                deviceTypes: [
+                    .builtInUltraWideCamera,
+                    .builtInWideAngleCamera,
+                    .builtInTelephotoCamera,
+                    .continuityCamera,
+                ],
+                mediaType: .video,
+                position: .back
+            )
+            print("ios17+ Discovered cameras:")
+            for device in discoverySession.devices {
+                print("Device: \(device.localizedName), type: \(device.deviceType.rawValue)")
+            }
+        } else {
+            // Fallback on earlier versions
+        }
+        
+        
         if let backCamera = AVCaptureDevice.default(for: AVMediaType.video) {
             if let input = try? AVCaptureDeviceInput(device: backCamera) {
                 session.sessionPreset = .photo
@@ -73,7 +106,9 @@ struct QRScannerView: UIViewRepresentable {
                 uiView.layer.addSublayer(previewLayer)
                 uiView.previewLayer = previewLayer
                 
-                session.startRunning()
+                DispatchQueue.global(qos: .userInitiated).async {
+                    self.session.startRunning()
+                }
             }
         }
         
