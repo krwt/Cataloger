@@ -32,6 +32,7 @@ struct ItemAddView: View {
                     TextField("Item Name", text: $asset.name)
                         .focused($focusedField, equals: .name)
                         .onSubmit { focusedField = .description }
+                        .focusBorder(focusedField == .name)
 
                     if !duplicateMatches.isEmpty {
                         ForEach(duplicateMatches) { match in
@@ -49,10 +50,27 @@ struct ItemAddView: View {
                         .lineLimit(3...8)
                         .focused($focusedField, equals: .description)
                         .onSubmit { focusedField = .container }
+                        .onChange(of: asset.itemDescription) { _, newValue in
+                            // Hardware Tab inserts a literal tab character
+                            // into multi-line TextFields instead of moving
+                            // focus. Strip it and advance manually.
+                            if newValue.contains("\t") {
+                                asset.itemDescription = newValue.replacingOccurrences(of: "\t", with: "")
+                                focusedField = .container
+                            }
+                        }
+                        .focusBorder(focusedField == .description)
 
                     TextField("Container Location", text: $asset.containerLocation)
                         .focused($focusedField, equals: .container)
                         .onSubmit { focusedField = .qrScan }
+                        .onChange(of: asset.containerLocation) { _, newValue in
+                            if newValue.contains("\t") {
+                                asset.containerLocation = newValue.replacingOccurrences(of: "\t", with: "")
+                                focusedField = .qrScan
+                            }
+                        }
+                        .focusBorder(focusedField == .container)
                 }
 
                 Section("QR Label") {
@@ -66,6 +84,8 @@ struct ItemAddView: View {
                         }
                     }
                     .focused($focusedField, equals: .qrScan)
+                    .keyboardShortcut(.defaultAction)
+                    .focusBorder(focusedField == .qrScan)
                 }
 
                 Section("Photo") {
@@ -75,6 +95,8 @@ struct ItemAddView: View {
                         Label("Take Photo", systemImage: "camera")
                     }
                     .focused($focusedField, equals: .image)
+                    .keyboardShortcut(.defaultAction)
+                    .focusBorder(focusedField == .image)
                     .disabled(isUploadingImage)
 
                     PhotosPicker("Choose from Library", selection: $photoPickerItem, matching: .images)
@@ -94,6 +116,7 @@ struct ItemAddView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .focused($focusedField, equals: .save)
+                        .keyboardShortcut(.defaultAction)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(asset.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -135,6 +158,18 @@ struct ItemAddView: View {
             .onChange(of: photoPickerItem) { _, newItem in
                 guard let newItem else { return }
                 Task { await handlePickedPhoto(newItem) }
+            }
+            // Only advances focus for the button-based fields (QR Label ->
+            // Take Photo -> Save) — the text fields (name/description/
+            // container) are handled entirely inside TabAwareTextField
+            // itself. Having both act on the same field was causing a
+            // double-advance race that cascaded focus straight to Save
+            // after a single keystroke.
+            .onKeyPress(.tab) {
+                guard let current = focusedField, current == .qrScan || current == .image else { return .ignored }
+                guard let next = current.next else { return .ignored }
+                focusedField = next
+                return .handled
             }
         }
     }
@@ -183,5 +218,16 @@ struct ItemAddView: View {
             description: asset.itemDescription
         )
         asset.imgurURLString = imgurURL
+    }
+}
+
+private extension View {
+    /// Thin green border indicating this control currently has keyboard focus.
+    func focusBorder(_ isActive: Bool) -> some View {
+        padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isActive ? Color.green : Color.clear, lineWidth: 1.5)
+            )
     }
 }

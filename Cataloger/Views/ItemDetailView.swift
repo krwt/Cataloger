@@ -4,8 +4,17 @@ import UIKit
 
 /// Shared field-focus order used by both the Detail and Add views so
 /// Tab-cycling behaves identically across both.
-enum AssetField: Hashable {
+enum AssetField: Hashable, CaseIterable {
     case name, description, container, qrScan, image, save
+}
+
+extension AssetField {
+    /// Next field in tab order, or nil if this is the last one.
+    var next: AssetField? {
+        guard let index = Self.allCases.firstIndex(of: self) else { return nil }
+        let nextIndex = Self.allCases.index(after: index)
+        return nextIndex < Self.allCases.endIndex ? Self.allCases[nextIndex] : nil
+    }
 }
 
 struct ItemDetailView: View {
@@ -34,10 +43,25 @@ struct ItemDetailView: View {
                     .lineLimit(3...8)
                     .focused($focusedField, equals: .description)
                     .onSubmit { focusedField = .container }
+                    .onChange(of: asset.itemDescription) { _, newValue in
+                        // Hardware Tab inserts a literal tab character into
+                        // multi-line TextFields instead of moving focus.
+                        // Strip it and advance manually.
+                        if newValue.contains("\t") {
+                            asset.itemDescription = newValue.replacingOccurrences(of: "\t", with: "")
+                            focusedField = .container
+                        }
+                    }
 
                 TextField("Container Location", text: $asset.containerLocation)
                     .focused($focusedField, equals: .container)
                     .onSubmit { focusedField = .qrScan }
+                    .onChange(of: asset.containerLocation) { _, newValue in
+                        if newValue.contains("\t") {
+                            asset.containerLocation = newValue.replacingOccurrences(of: "\t", with: "")
+                            focusedField = .qrScan
+                        }
+                    }
 
                 Toggle("Checked Out", isOn: $asset.isCheckedOut)
             }
@@ -141,6 +165,19 @@ struct ItemDetailView: View {
         .onChange(of: photoPickerItem) { _, newItem in
             guard let newItem else { return }
             Task { await handlePickedPhoto(newItem) }
+        }
+        // Explicit Tab handling: overrides the description field's default
+        // behavior of inserting a literal tab character (multi-line
+        // TextField), and extends the chain past text fields into the
+        // QR/Photo/Save buttons.
+        // Only advances focus for the button-based fields (QR Label ->
+        // Take Photo -> Save) — the text fields are handled entirely
+        // inside TabAwareTextField itself, to avoid a double-advance race.
+        .onKeyPress(.tab) {
+            guard let current = focusedField, current == .qrScan || current == .image else { return .ignored }
+            guard let next = current.next else { return .ignored }
+            focusedField = next
+            return .handled
         }
         // Cmd+Delete secure deletion shortcut, confirmed via Tab-to-highlight or a second Cmd+Delete.
         .onKeyPress(.delete, phases: .down) { press in

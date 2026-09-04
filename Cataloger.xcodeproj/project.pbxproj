@@ -47,7 +47,6 @@
 		946814383048FF04004A38DA /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 946814373048FF04004A38DA /* CameraCaptureView.swift */; };
 		9468143A30493C17004A38DA /* iCloudPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9468143930493C17004A38DA /* iCloudPaths.swift */; };
 		9468143B30493C17004A38DA /* iCloudPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9468143930493C17004A38DA /* iCloudPaths.swift */; };
-		9468143D304A1F27004A38DA /* TabAwareTextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9468143C304A1F27004A38DA /* TabAwareTextField.swift */; };
 		94BF01B924C1573D00319C89 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01B824C1573D00319C89 /* Assets.xcassets */; };
 		94BF01BC24C1573D00319C89 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */; };
 		94BF01CA24C1573D00319C89 /* CatalogerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01C924C1573D00319C89 /* CatalogerTests.swift */; };
@@ -93,7 +92,6 @@
 		946814353048ED08004A38DA /* HEICHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HEICHelper.swift; sourceTree = "<group>"; };
 		946814373048FF04004A38DA /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		9468143930493C17004A38DA /* iCloudPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudPaths.swift; sourceTree = "<group>"; };
-		9468143C304A1F27004A38DA /* TabAwareTextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabAwareTextField.swift; sourceTree = "<group>"; };
 		94BF01AF24C1573C00319C89 /* Cataloger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cataloger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		94BF01B824C1573D00319C89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -170,7 +168,6 @@
 			children = (
 				946814083048ECCE004A38DA /* BatchActionBar.swift */,
 				946814093048ECCE004A38DA /* ContentView.swift */,
-				9468143C304A1F27004A38DA /* TabAwareTextField.swift */,
 				9468140A3048ECCE004A38DA /* ItemAddView.swift */,
 				9468140B3048ECCE004A38DA /* ItemDetailView.swift */,
 				946814373048FF04004A38DA /* CameraCaptureView.swift */,
@@ -393,7 +390,6 @@
 				946814213048ECCE004A38DA /* BatchActionBar.swift in Sources */,
 				9468143B30493C17004A38DA /* iCloudPaths.swift in Sources */,
 				946814383048FF04004A38DA /* CameraCaptureView.swift in Sources */,
-				9468143D304A1F27004A38DA /* TabAwareTextField.swift in Sources */,
 				946814223048ECCE004A38DA /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
