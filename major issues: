@@ -1,0 +1,24 @@
+major issues:
+
+
+minor issue:
+3. tab key when writing description doesnt move on the container location, need to patch, no need for tab key inside description
+4. adding new item when type in name - not showing similar item 
+
+when tapping placeholder image icon on the items row when the item doens't have an image, it displays a black image. should make the placeholder icon not clickable, only when an item have an image should image preview works.
+
+
+ 4. after import legacy .mcs file, imported items are not saved after relaunch, let's fix it. No need to show me line by line just give me the modified files babe
+
+Thanks babe, now let's fix the following in one go: 
+
+
+4. qrcode scanner camera view is zoomed in for some reason running on mac(ipad apps) using continuity camera, let's fix that
+
+
+No need to tell me details just give me the modified files and show me the list of files updated, babe
+
+tab tabbing to random tabbing place
+
+hey babe some minor fixes:
+in additemview, after tabbing into description, can't tab to container location, let's fix that: no need for tab white space inside description box, when tab is hit inside description, move cursor to container. Also: tab in container location should move focus to add label , then take photo, then save button. 

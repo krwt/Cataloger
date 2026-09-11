@@ -63,7 +63,10 @@ struct ItemAddView: View {
 
                     TextField("Container Location", text: $asset.containerLocation)
                         .focused($focusedField, equals: .container)
-                        .onSubmit { focusedField = .qrScan }
+                        .onSubmit {
+                            print("⏎ Container onSubmit fired")
+                            focusedField = .qrScan
+                        }
                         .onChange(of: asset.containerLocation) { _, newValue in
                             if newValue.contains("\t") {
                                 asset.containerLocation = newValue.replacingOccurrences(of: "\t", with: "")
@@ -79,12 +82,12 @@ struct ItemAddView: View {
                     } label: {
                         HStack {
                             Text(asset.qrLabelDisplayText)
-                            Spacer()
+                            //Spacer()
                             Image(systemName: "qrcode.viewfinder")
                         }
                     }
+                    .buttonStyle(.plain).focusable()
                     .focused($focusedField, equals: .qrScan)
-                    .keyboardShortcut(.defaultAction)
                     .focusBorder(focusedField == .qrScan)
                 }
 
@@ -94,8 +97,9 @@ struct ItemAddView: View {
                     } label: {
                         Label("Take Photo", systemImage: "camera")
                     }
+                    .buttonStyle(.plain)
+                    .focusable()
                     .focused($focusedField, equals: .image)
-                    .keyboardShortcut(.defaultAction)
                     .focusBorder(focusedField == .image)
                     .disabled(isUploadingImage)
 
@@ -109,6 +113,9 @@ struct ItemAddView: View {
             }
             .navigationTitle("New Item")
             .onAppear { focusedField = .name } // rapid-onboarding: focus Name on launch
+            .onChange(of: focusedField) { oldValue, newValue in
+                print("🔎 focusedField: \(String(describing: oldValue)) -> \(String(describing: newValue))")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
@@ -116,7 +123,6 @@ struct ItemAddView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
                         .focused($focusedField, equals: .save)
-                        .keyboardShortcut(.defaultAction)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(asset.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -161,8 +167,8 @@ struct ItemAddView: View {
             }
             // Only advances focus for the button-based fields (QR Label ->
             // Take Photo -> Save) — the text fields (name/description/
-            // container) are handled entirely inside TabAwareTextField
-            // itself. Having both act on the same field was causing a
+            // container) advance via their own onSubmit/onChange handlers
+            // above. Having both act on the same field was causing a
             // double-advance race that cascaded focus straight to Save
             // after a single keystroke.
             .onKeyPress(.tab) {
@@ -170,6 +176,29 @@ struct ItemAddView: View {
                 guard let next = current.next else { return .ignored }
                 focusedField = next
                 return .handled
+            }
+            // Dispatches Enter to whichever button currently has focus.
+            // Stacking multiple `.keyboardShortcut(.defaultAction)`
+            // modifiers doesn't work the way it sounds — SwiftUI resolves
+            // to a single global default action (in practice, the
+            // last-declared one), not "whichever button has focus", so
+            // Enter always fired Take Photo regardless of what was
+            // actually focused. This checks focus explicitly instead.
+            .onKeyPress(.return) {
+                print("↩️ onKeyPress(.return) fired, focusedField = \(String(describing: focusedField))")
+                switch focusedField {
+                case .qrScan:
+                    showScanner = true
+                    return .handled
+                case .image:
+                    showCamera = true
+                    return .handled
+                case .save:
+                    save()
+                    return .handled
+                default:
+                    return .ignored
+                }
             }
         }
     }
