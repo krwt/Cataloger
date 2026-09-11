@@ -9,7 +9,6 @@ struct ItemAddView: View {
     @FocusState private var focusedField: AssetField?
     @State private var showScanner = false
     @State private var showQRConflictAlert = false
-    @State private var newTagText = ""
     @State private var showCamera = false
     @State private var isUploadingImage = false
     @State private var showDuplicateDetail: Asset?
@@ -73,6 +72,8 @@ struct ItemAddView: View {
                         }
                         .focusBorder(focusedField == .container)
                 }
+
+                TagEditorSection(tags: $asset.tags)
 
                 Section("QR Label") {
                     Button {

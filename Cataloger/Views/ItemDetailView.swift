@@ -26,7 +26,6 @@ struct ItemDetailView: View {
     @State private var showQRConflictAlert = false
     @State private var showDeleteConfirm = false
     @State private var deleteConfirmArmed = false
-    @State private var newTagText = ""
     @State private var showCamera = false
     @State private var isUploadingImage = false
 
@@ -64,19 +63,7 @@ struct ItemDetailView: View {
                 Toggle("Checked Out", isOn: $asset.isCheckedOut)
             }
 
-            Section("Tags") {
-                TagCloudView(tags: $asset.tags)
-                HStack {
-                    TextField("Add tag", text: $newTagText)
-                    Button("Add") {
-                        let tag = Asset.normalizeTag(newTagText)
-                        if !tag.isEmpty && !asset.tags.contains(where: { Asset.normalizeTag($0) == tag }) {
-                            asset.tags.append(tag)
-                        }
-                        newTagText = ""
-                    }
-                }
-            }
+            TagEditorSection(tags: $asset.tags)
 
             Section("QR Label") {
                 Button {
