@@ -81,11 +81,16 @@ struct ItemListView: View {
             }
         }
         // MARK: Desktop-class keyboard shortcuts (iPad & Mac hardware keyboard)
-        .onKeyPress(.init("f"), phases: .down) { press in
-            guard press.modifiers.contains(.command) else { return .ignored }
-            isSearchFocused = true
-            return .handled
-        }
+        // Uses a hidden Button + .keyboardShortcut rather than .onKeyPress:
+        // onKeyPress only reliably fires when something within its subtree
+        // already has focus, so it wasn't catching Cmd+F when nothing (or
+        // a different view entirely) currently held focus. .keyboardShortcut
+        // on a Button works window-wide regardless of current focus.
+        .background(
+            Button("") { isSearchFocused = true }
+                .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        )
         .onKeyPress(.escape) {
             if isSelectMode {
                 isSelectMode = false

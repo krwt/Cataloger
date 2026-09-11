@@ -16,17 +16,26 @@ struct ItemRowView: View {
             }
             .buttonStyle(.plain) // tapping the thumbnail must NOT trigger row navigation
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(asset.name)
-                    .font(.body.weight(.medium))
-                    .foregroundStyle(Color.primary)
-                Text(asset.itemDescription)
-                    .font(.caption)
-                    .foregroundStyle(Color.secondary)
-                    .lineLimit(1)
-                Text(asset.containerLocation)
-                    .font(.caption2)
-                    .foregroundStyle(Color.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(asset.name)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(Color.primary)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if !asset.containerLocation.isEmpty {
+                        Text(asset.containerLocation)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(Color.primary)
+                            .lineLimit(1)
+                    }
+                }
+                if !asset.itemDescription.isEmpty {
+                    Text(asset.itemDescription)
+                        .font(.caption)
+                        .foregroundStyle(Color.secondary)
+                        .lineLimit(1)
+                }
             }
 
             Spacer()

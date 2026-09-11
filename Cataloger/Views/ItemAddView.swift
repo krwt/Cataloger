@@ -1,5 +1,4 @@
 import SwiftUI
-import PhotosUI
 import UIKit
 
 struct ItemAddView: View {
@@ -11,7 +10,6 @@ struct ItemAddView: View {
     @State private var showScanner = false
     @State private var showQRConflictAlert = false
     @State private var newTagText = ""
-    @State private var photoPickerItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var isUploadingImage = false
     @State private var showDuplicateDetail: Asset?
@@ -82,12 +80,13 @@ struct ItemAddView: View {
                     } label: {
                         HStack {
                             Text(asset.qrLabelDisplayText)
-                            //Spacer()
+                            Spacer()
                             Image(systemName: "qrcode.viewfinder")
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain).focusable()
-                    .focused($focusedField, equals: .qrScan)
+                    .buttonStyle(.plain)
                     .focusBorder(focusedField == .qrScan)
                 }
 
@@ -96,15 +95,12 @@ struct ItemAddView: View {
                         showCamera = true
                     } label: {
                         Label("Take Photo", systemImage: "camera")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .focusable()
-                    .focused($focusedField, equals: .image)
                     .focusBorder(focusedField == .image)
                     .disabled(isUploadingImage)
-
-                    PhotosPicker("Choose from Library", selection: $photoPickerItem, matching: .images)
-                        .disabled(isUploadingImage)
 
                     if isUploadingImage {
                         ProgressView("Uploading...")
@@ -122,7 +118,6 @@ struct ItemAddView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .focused($focusedField, equals: .save)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(asset.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -160,10 +155,6 @@ struct ItemAddView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("That code is already linked to another item. Scan a different label.")
-            }
-            .onChange(of: photoPickerItem) { _, newItem in
-                guard let newItem else { return }
-                Task { await handlePickedPhoto(newItem) }
             }
             // Only advances focus for the button-based fields (QR Label ->
             // Take Photo -> Save) — the text fields (name/description/
@@ -214,7 +205,6 @@ struct ItemAddView: View {
             withAnimation { showSavedConfirmation = true }
 
             asset = Asset(name: "", containerLocation: keptContainer)
-            photoPickerItem = nil
             focusedField = .name
 
             try? await Task.sleep(nanoseconds: 1_200_000_000)
@@ -229,12 +219,6 @@ struct ItemAddView: View {
             return
         }
         asset.qrcodeUUID = code
-    }
-
-    private func handlePickedPhoto(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return }
-        await handleCapturedPhoto(image)
     }
 
     private func handleCapturedPhoto(_ image: UIImage) async {

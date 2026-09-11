@@ -48,6 +48,18 @@ struct WidescreenContainer: View {
         .onChange(of: store.selectedAssetIDs) { _, newValue in
             selectedAssetID = newValue.count == 1 ? newValue.first : nil
         }
+        // Hidden Button + .keyboardShortcut instead of .onKeyPress(.escape):
+        // onKeyPress only fires when something within its subtree currently
+        // holds real focus, which nothing here reliably does on iOS.
+        .background(
+            Button("") {
+                if (store.activeSidebarFilter ?? .all) != .all {
+                    store.activeSidebarFilter = .all
+                }
+            }
+            .keyboardShortcut(.escape, modifiers: [])
+            .hidden()
+        )
     }
 }
 
@@ -56,13 +68,31 @@ struct WidescreenContainer: View {
 /// calls across several `Section`s is enough to blow past the type
 /// checker's time budget. Isolating each section into its own small view
 /// (with its own inferred type) fixes the "unable to type-check" error.
+///
+/// Uses native `List(selection:)` — same as before — so the sidebar keeps
+/// the system's own selection highlight styling exactly. The "tap an
+/// already-selected row again to deselect" behavior lives entirely in
+/// `selectionBinding`'s custom `set`, not in the row views themselves,
+/// which are back to plain `Label(...).tag(...)`.
 struct SidebarView: View {
     @Environment(AppStore.self) private var store
 
-    var body: some View {
-        @Bindable var store = store
+    private var selectionBinding: Binding<AppStore.SidebarFilter?> {
+        Binding(
+            get: { store.activeSidebarFilter },
+            set: { newValue in
+                if let newValue, newValue == store.activeSidebarFilter {
+                    // Re-tapped the already-selected row -> deselect.
+                    store.activeSidebarFilter = .all
+                } else {
+                    store.activeSidebarFilter = newValue ?? .all
+                }
+            }
+        )
+    }
 
-        List(selection: $store.activeSidebarFilter) {
+    var body: some View {
+        List(selection: selectionBinding) {
             SidebarViewsSection()
             SidebarContainersSection(containers: store.allContainers)
             SidebarTagsSection(tags: store.allTagsWithCounts)

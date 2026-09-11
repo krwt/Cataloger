@@ -1,5 +1,4 @@
 import SwiftUI
-import PhotosUI
 import UIKit
 
 /// Shared field-focus order used by both the Detail and Add views so
@@ -28,7 +27,6 @@ struct ItemDetailView: View {
     @State private var showDeleteConfirm = false
     @State private var deleteConfirmArmed = false
     @State private var newTagText = ""
-    @State private var photoPickerItem: PhotosPickerItem?
     @State private var showCamera = false
     @State private var isUploadingImage = false
 
@@ -89,6 +87,8 @@ struct ItemDetailView: View {
                         Spacer()
                         Image(systemName: "qrcode.viewfinder")
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
                 .focused($focusedField, equals: .qrScan)
             }
@@ -103,12 +103,12 @@ struct ItemDetailView: View {
                     showCamera = true
                 } label: {
                     Label("Take Photo", systemImage: "camera")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
                 .focused($focusedField, equals: .image)
                 .disabled(isUploadingImage)
-
-                PhotosPicker("Choose from Library", selection: $photoPickerItem, matching: .images)
-                    .disabled(isUploadingImage)
 
                 if isUploadingImage {
                     ProgressView("Uploading...")
@@ -162,17 +162,9 @@ struct ItemDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
-        .onChange(of: photoPickerItem) { _, newItem in
-            guard let newItem else { return }
-            Task { await handlePickedPhoto(newItem) }
-        }
-        // Explicit Tab handling: overrides the description field's default
-        // behavior of inserting a literal tab character (multi-line
-        // TextField), and extends the chain past text fields into the
-        // QR/Photo/Save buttons.
         // Only advances focus for the button-based fields (QR Label ->
-        // Take Photo -> Save) — the text fields are handled entirely
-        // inside TabAwareTextField itself, to avoid a double-advance race.
+        // Take Photo -> Save) — the text fields advance via their own
+        // onSubmit/onChange handlers above, to avoid a double-advance race.
         .onKeyPress(.tab) {
             guard let current = focusedField, current == .qrScan || current == .image else { return .ignored }
             guard let next = current.next else { return .ignored }
@@ -211,12 +203,6 @@ struct ItemDetailView: View {
             return
         }
         asset.qrcodeUUID = code
-    }
-
-    private func handlePickedPhoto(_ item: PhotosPickerItem) async {
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: data) else { return }
-        await handleCapturedPhoto(image)
     }
 
     private func handleCapturedPhoto(_ image: UIImage) async {
