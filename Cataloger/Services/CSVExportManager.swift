@@ -5,7 +5,13 @@ import Foundation
 /// syncs back into CloudKit.
 enum CSVExportManager {
 
-    static let fileName = "backup.csv"
+    /// Timestamped filename, e.g. "backup-202609211622.csv" — each export
+    /// gets its own file rather than always overwriting the same one.
+    static var fileName: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyyMMddHHmm"
+        return "backup-\(formatter.string(from: Date())).csv"
+    }
     private static let header = [
         "Name", "Description", "Container Location", "Tags",
         "QR UUID", "Imgur URL", "Checked Out", "System UUID", "Created At"
