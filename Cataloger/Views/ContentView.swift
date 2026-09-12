@@ -14,6 +14,22 @@ struct ContentView: View {
                 WidescreenContainer()
             }
         }
+        .overlay(alignment: .bottom) {
+            if store.isSyncing {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(store.syncStatusMessage)
+                        .font(.footnote)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                .shadow(radius: 4)
+                .padding(.bottom, 20)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.default, value: store.isSyncing)
+            }
+        }
         .alert("Notice", isPresented: .constant(store.lastError != nil), presenting: store.lastError) { _ in
             Button("OK") { store.lastError = nil }
         } message: { message in
@@ -96,6 +112,17 @@ struct SidebarView: View {
             SidebarViewsSection()
             SidebarContainersSection(containers: store.allContainers)
             SidebarTagsSection(tags: store.allTagsWithCounts)
+            SidebarStatsSection(totalCount: store.assets.count)
+        }
+    }
+}
+
+private struct SidebarStatsSection: View {
+    let totalCount: Int
+
+    var body: some View {
+        Section("Stats") {
+            LabeledContent("Total Items", value: "\(totalCount)")
         }
     }
 }

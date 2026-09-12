@@ -13,6 +13,14 @@ final class AppStore {
     var selectedAssetIDs: Set<String> = []
     var isLoading = false
     var lastError: String?
+    /// Set during any bulk CloudKit operation (delete all, legacy import,
+    /// CSV restore) so the UI can show a visible "don't close the app yet"
+    /// status — the local list updates instantly, but the actual CloudKit
+    /// write happens after, and closing the app before it finishes means
+    /// relaunch shows whatever *actually* made it to the server, not what
+    /// you saw a moment ago.
+    var isSyncing = false
+    var syncStatusMessage = ""
 
     // Sidebar filter state (widescreen NavigationSplitView).
     enum SidebarFilter: Hashable {
@@ -157,19 +165,26 @@ final class AppStore {
 
     // MARK: - Mutations
 
-    @discardableResult
-    func save(_ asset: Asset) async -> Asset {
-        var toSave = asset
-        toSave.name = Asset.sanitize(toSave.name)
-        toSave.itemDescription = Asset.sanitize(toSave.itemDescription)
-        toSave.containerLocation = Asset.sanitize(toSave.containerLocation)
+    /// Shared sanitization used by both single-item save and bulk import,
+    /// so the two paths can't silently drift apart.
+    private func sanitized(_ asset: Asset) -> Asset {
+        var result = asset
+        result.name = Asset.sanitize(result.name)
+        result.itemDescription = Asset.sanitize(result.itemDescription)
+        result.containerLocation = Asset.sanitize(result.containerLocation)
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .capitalized
         var seenTags = Set<String>()
-        toSave.tags = toSave.tags
+        result.tags = result.tags
             .map(Asset.normalizeTag)
             .filter { !$0.isEmpty && seenTags.insert($0).inserted }
-        toSave.modifiedAt = Date()
+        result.modifiedAt = Date()
+        return result
+    }
+
+    @discardableResult
+    func save(_ asset: Asset) async -> Asset {
+        let toSave = sanitized(asset)
 
         if let index = assets.firstIndex(where: { $0.id == toSave.id }) {
             assets[index] = toSave
@@ -186,6 +201,51 @@ final class AppStore {
         } catch {
             lastError = "Saved locally; will sync when online."
             return toSave
+        }
+    }
+
+    /// Bulk-saves many assets at once (legacy `.mcs` import, CSV restore)
+    /// using a single batched CloudKit write instead of one fetch-then-save
+    /// round-trip per item. `save()`'s per-item existence check exists to
+    /// support last-write-wins conflict resolution on regular edits, but
+    /// for a bulk import of mostly-new items, that per-item "does this
+    /// already exist?" check is an expected-but-still-counted failure for
+    /// every new record — enough of them in a row triggers CloudKit's own
+    /// error-rate throttling. This path skips that check entirely.
+    func bulkSave(_ newAssets: [Asset]) async {
+        let sanitizedAssets = newAssets.map(sanitized)
+
+        // Defensive dedup by ID, keeping the last occurrence — CloudKit's
+        // batch write hard-rejects a request containing the same record ID
+        // more than once ("You can't save the same record twice"), failing
+        // the *entire* batch. LegacyMigrationManager already dedupes at
+        // the source, but this is cheap insurance against any other future
+        // source of duplicate-ID batches (e.g. a manually concatenated
+        // CSV backup file).
+        var deduped: [String: Asset] = [:]
+        var order: [String] = []
+        for asset in sanitizedAssets {
+            if deduped[asset.id] == nil { order.append(asset.id) }
+            deduped[asset.id] = asset
+        }
+        let toSave = order.compactMap { deduped[$0] }
+
+        isSyncing = true
+        syncStatusMessage = "Syncing \(toSave.count) item(s) to iCloud…"
+        defer { isSyncing = false }
+
+        for asset in toSave {
+            if let index = assets.firstIndex(where: { $0.id == asset.id }) {
+                assets[index] = asset
+            } else {
+                assets.append(asset)
+            }
+        }
+
+        do {
+            try await cloudKit.batchUpsert(toSave)
+        } catch {
+            lastError = "Items saved locally but some failed to sync: \(error.localizedDescription)"
         }
     }
 
@@ -252,10 +312,74 @@ final class AppStore {
 
     // MARK: - Legacy migration
 
-    func importLegacy(fileURL: URL) async throws -> LegacyMigrationManager.MigrationResult {
+    struct LegacyImportPreview {
+        var assets: [Asset]
+        var updatedCount: Int
+        var createdCount: Int
+        var skippedRowCount: Int
+        var duplicateIDsReassigned: Int
+    }
+
+    /// Parses the `.mcs` file and classifies rows as update-vs-create
+    /// against currently loaded assets, without committing anything yet —
+    /// mirrors `previewCSVRestore`'s preview-then-confirm flow.
+    func previewLegacyImport(fileURL: URL) throws -> LegacyImportPreview {
         let result = try LegacyMigrationManager.migrate(fileURL: fileURL)
-        assets.append(contentsOf: result.assets)
-        try await cloudKit.batchUpsert(result.assets)
-        return result
+        let existingIDs = Set(assets.map(\.id))
+        let updated = result.assets.filter { existingIDs.contains($0.id) }.count
+        let created = result.assets.count - updated
+        return LegacyImportPreview(
+            assets: result.assets,
+            updatedCount: updated,
+            createdCount: created,
+            skippedRowCount: result.skippedLineNumbers.count,
+            duplicateIDsReassigned: result.duplicateIDsReassigned
+        )
+    }
+
+    /// Commits a previously-previewed legacy import via the same bulk path
+    /// as CSV restore.
+    func commitLegacyImport(_ assets: [Asset]) async {
+        await bulkSave(assets)
+    }
+
+    // MARK: - CSV backup / restore
+
+    /// Parses `fileURL` and reports what a restore would do, without
+    /// committing anything yet — the caller shows this summary and asks
+    /// for confirmation before calling `commitCSVRestore`.
+    func previewCSVRestore(fileURL: URL) throws -> CSVBackupManager.RestorePreview {
+        try CSVBackupManager.preview(fileURL: fileURL, existingAssets: assets)
+    }
+
+    /// Commits a previously-previewed restore. Uses `bulkSave` (a single
+    /// batched CloudKit write) rather than looping `save()` per item —
+    /// same reasoning as `importLegacy`: many per-item existence checks in
+    /// a row trigger CloudKit's error-rate throttling.
+    func commitCSVRestore(_ restoredAssets: [Asset]) async {
+        await bulkSave(restoredAssets)
+    }
+
+    // MARK: - Delete all
+
+    /// Permanently deletes every asset, locally and from CloudKit. The
+    /// two-step warning lives in the UI layer — this function itself does
+    /// not re-confirm, since by the time it's called the user has already
+    /// been asked twice.
+    func deleteAllAssets() async {
+        let allIDs = assets.map(\.id)
+
+        isSyncing = true
+        syncStatusMessage = "Deleting \(allIDs.count) item(s) from iCloud…"
+        defer { isSyncing = false }
+
+        assets.removeAll()
+        selectedAssetIDs.removeAll()
+
+        do {
+            try await cloudKit.batchDelete(assetIDs: allIDs)
+        } catch {
+            lastError = "Items deleted locally but some failed to delete from iCloud: \(error.localizedDescription)"
+        }
     }
 }

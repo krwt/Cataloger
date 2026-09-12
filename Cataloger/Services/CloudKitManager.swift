@@ -50,6 +50,11 @@ actor CloudKitManager {
     /// That's expected on first launch, so it's treated as "no assets yet"
     /// rather than a real connectivity failure.
     func fetchAllAssets() async throws -> [Asset] {
+        // Queries against a real custom field (`modifiedAt`, always set on
+        // every saved Asset) rather than the system `recordName` field.
+        // `recordName` requires a Queryable index too, but it's a reserved
+        // system field that can't be indexed through the normal "Add Field"
+        // flow in the CloudKit Dashboard — a real field sidesteps that.
         let epoch = Date(timeIntervalSince1970: 0) as NSDate
         let query = CKQuery(recordType: Asset.recordType, predicate: NSPredicate(format: "modifiedAt > %@", epoch))
         var results: [Asset] = []
@@ -71,7 +76,7 @@ actor CloudKitManager {
                 cursor = response.queryCursor
             } while cursor != nil
         } catch let error as CKError where error.code == .unknownItem || error.code == .invalidArguments {
-            print("⚠️ CloudKit fetch failed for assets : \(error)")
+            print("⚠️ CloudKit fetch returned unknownItem/invalidArguments, treating as empty: \(error)")
             return []
         }
 
@@ -127,13 +132,75 @@ actor CloudKitManager {
         }
     }
 
-    /// Batch-commits an array of assets (used by the legacy .mcs migration import).
+    /// CloudKit hard-caps how many records a single modifyRecords call can
+    /// carry (roughly 400 in practice). Anything larger needs to be split
+    /// into multiple sequential batch calls.
+    private static let maxBatchSize = 400
+
+    /// Deletes many assets in a single batched CloudKit call, instead of
+    /// one `deleteRecord` round-trip per item awaited sequentially. The
+    /// sequential version was slow enough for large collections that
+    /// users would close the app before it finished — this is the delete
+    /// counterpart to `batchUpsert`.
+    func batchDelete(assetIDs: [String]) async throws {
+        let recordIDs = assetIDs.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
+        var firstError: Error?
+
+        for chunk in recordIDs.chunked(into: Self.maxBatchSize) {
+            do {
+                let result = try await database.modifyRecords(
+                    saving: [],
+                    deleting: chunk,
+                    savePolicy: .changedKeys,
+                    atomically: false
+                )
+                for (_, deleteResult) in result.deleteResults {
+                    if case .failure(let error) = deleteResult, firstError == nil {
+                        firstError = error
+                    }
+                }
+            } catch {
+                // Keep going even if a whole chunk fails (e.g. a transient
+                // network blip) — later chunks may still succeed, and we'd
+                // rather persist as much as possible than give up early.
+                if firstError == nil { firstError = error }
+            }
+        }
+
+        if let firstError { throw firstError }
+    }
+
+    /// Batch-commits an array of assets (used by legacy .mcs migration and
+    /// CSV restore), automatically chunked to stay under CloudKit's
+    /// per-request record limit.
     func batchUpsert(_ assets: [Asset]) async throws {
         let zoneID = self.zoneID
         let records = assets.map { $0.toRecord(zoneID: zoneID) }
-        let op = CKModifyRecordsOperation(recordsToSave: records, recordIDsToDelete: nil)
-        op.savePolicy = .changedKeys
-        try await database.modifyRecords(saving: records, deleting: [])
+        var firstError: Error?
+
+        for chunk in records.chunked(into: Self.maxBatchSize) {
+            do {
+                let result = try await database.modifyRecords(
+                    saving: chunk,
+                    deleting: [],
+                    savePolicy: .changedKeys,
+                    atomically: false
+                )
+                // atomically: false means one bad record doesn't roll back
+                // the whole chunk — but we still want to surface if
+                // anything failed, rather than silently reporting success
+                // while some records never actually made it to CloudKit.
+                for (_, saveResult) in result.saveResults {
+                    if case .failure(let error) = saveResult, firstError == nil {
+                        firstError = error
+                    }
+                }
+            } catch {
+                if firstError == nil { firstError = error }
+            }
+        }
+
+        if let firstError { throw firstError }
     }
 
     // MARK: - Offline ledger flushing

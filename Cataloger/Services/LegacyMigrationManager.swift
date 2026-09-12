@@ -18,7 +18,8 @@ enum LegacyMigrationManager {
 
     struct MigrationResult {
         var assets: [Asset]
-        var skippedLineNumbers: [Int]   // rows dropped due to missing required fields
+        var skippedLineNumbers: [Int]     // rows dropped due to missing required fields
+        var duplicateIDsReassigned: Int   // rows that shared a System UUID with an earlier row and got a fresh one, so nothing is lost
     }
 
     /// v1's own writer (`Items.getData`) skips any line with fewer than 5
@@ -74,6 +75,28 @@ enum LegacyMigrationManager {
             assets.append(asset)
         }
 
-        return MigrationResult(assets: assets, skippedLineNumbers: skipped)
+        // v1's own update() function (see Item.swift) appended a new line
+        // per edit without ever removing the old one, so a long-lived .mcs
+        // file can contain many rows sharing the same UUID. Rather than
+        // collapsing those down to just the last one (which would discard
+        // whatever the earlier rows described), every row after the first
+        // occurrence of a given UUID gets a fresh, unique one instead —
+        // preserving all of them as distinct items. This also happens to
+        // be required for CloudKit's batch write, which hard-rejects a
+        // request containing the same record ID more than once.
+        var seenIDs = Set<String>()
+        var finalAssets: [Asset] = []
+        var reassignedCount = 0
+
+        for var asset in assets {
+            if seenIDs.contains(asset.id) {
+                asset.id = UUID().uuidString
+                reassignedCount += 1
+            }
+            seenIDs.insert(asset.id)
+            finalAssets.append(asset)
+        }
+
+        return MigrationResult(assets: finalAssets, skippedLineNumbers: skipped, duplicateIDsReassigned: reassignedCount)
     }
 }
