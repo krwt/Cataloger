@@ -2,9 +2,16 @@ major issues:
 
 
 minor issue:
-3. tab key when writing description doesnt move on the container location, need to patch, no need for tab key inside description
+3. tab key when writing description doesnt move on the container location, need to patch, no need for tab key inside description 
+*kinda fixed. button still needs click/touch
 4. adding new item when type in name - not showing similar item 
+**its showing warnings**
 
+7.tags need autocomplete 
+
+6. tags not in itemaddview
+
+5. 
 when tapping placeholder image icon on the items row when the item doens't have an image, it displays a black image. should make the placeholder icon not clickable, only when an item have an image should image preview works.
 
 
@@ -20,5 +27,15 @@ No need to tell me details just give me the modified files and show me the list 
 
 tab tabbing to random tabbing place
 
-hey babe some minor fixes:
-in additemview, after tabbing into description, can't tab to container location, let's fix that: no need for tab white space inside description box, when tab is hit inside description, move cursor to container. Also: tab in container location should move focus to add label , then take photo, then save button. 
+
+1. **clear all text button for search bar
+
+2.* don't preload all images, but make a button under imgur account settings button to turn on the current preload all images mode
+
+3.* iphone version doesint have left sidebar for some reason
+
+4. ***hold off implementation for now, how to best accomplish the following: display the list in chronological way (latest addition on top, ignore edit). when importing legacy mcs file, note that it is in chronological way, with items written line by line. when exporting csv backup, it should also be written in a chonological way to make sure reimport from backup maintains chronological order. 
+
+should created and edited timestamp be included in db and csv?
+
+4. *pendingSyncCount is not working, if i quit half way import legacy mcs or delete all, no pending sync but i can see item count is less than legacy mcs file contains, or residual items in case of "delete all"

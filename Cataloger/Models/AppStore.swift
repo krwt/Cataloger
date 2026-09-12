@@ -21,6 +21,9 @@ final class AppStore {
     /// you saw a moment ago.
     var isSyncing = false
     var syncStatusMessage = ""
+    /// Live count of mutations still queued in the offline ledger, shown
+    /// as "N items awaiting sync" in the sidebar.
+    var pendingSyncCount = 0
 
     // Sidebar filter state (widescreen NavigationSplitView).
     enum SidebarFilter: Hashable {
@@ -68,7 +71,10 @@ final class AppStore {
 
     // MARK: - Derived / computed
 
-    /// Search + sidebar filtering, entirely in-memory.
+    /// Search + sidebar filtering, entirely in-memory. Sorted newest-first
+    /// by `createdAt` ("latest addition on top") — deliberately not
+    /// `modifiedAt`, since that would reorder the whole list every time
+    /// someone just edits a description.
     var visibleAssets: [Asset] {
         var result = assets
 
@@ -84,14 +90,16 @@ final class AppStore {
         }
 
         let trimmed = searchText.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return result }
-
-        let needle = trimmed.lowercased()
-        return result.filter {
-            $0.name.lowercased().contains(needle)
-                || $0.qrLabelDisplayText.lowercased().contains(needle)
-                || $0.tags.contains { $0.lowercased().contains(needle) }
+        if !trimmed.isEmpty {
+            let needle = trimmed.lowercased()
+            result = result.filter {
+                $0.name.lowercased().contains(needle)
+                    || $0.qrLabelDisplayText.lowercased().contains(needle)
+                    || $0.tags.contains { $0.lowercased().contains(needle) }
+            }
         }
+
+        return result.sorted { $0.createdAt > $1.createdAt }
     }
 
     /// True when the active search yields zero matches - drives the
@@ -148,11 +156,22 @@ final class AppStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            try await cloudKit.bootstrap()
+            let stillFailedCount = try await cloudKit.bootstrap()
             assets = try await cloudKit.fetchAllAssets()
+            await refreshPendingSyncCount()
+            if stillFailedCount > 0 {
+                lastError = "\(stillFailedCount) item(s) still couldn't sync to iCloud after retrying. They're saved on this device and will keep retrying — check your internet connection."
+            }
         } catch {
             lastError = "Could not connect to iCloud: \(error.localizedDescription)"
         }
+    }
+
+    /// Refreshes the visible "N items awaiting sync" count from the
+    /// offline ledger. Called after any operation that could add to or
+    /// drain that queue.
+    func refreshPendingSyncCount() async {
+        pendingSyncCount = await cloudKit.pendingMutationCount()
     }
 
     func refresh() async {
@@ -197,9 +216,11 @@ final class AppStore {
             if let index = assets.firstIndex(where: { $0.id == resolved.id }) {
                 assets[index] = resolved // may reflect remote last-write-wins result
             }
+            await refreshPendingSyncCount()
             return resolved
         } catch {
             lastError = "Saved locally; will sync when online."
+            await refreshPendingSyncCount()
             return toSave
         }
     }
@@ -247,6 +268,7 @@ final class AppStore {
         } catch {
             lastError = "Items saved locally but some failed to sync: \(error.localizedDescription)"
         }
+        await refreshPendingSyncCount()
     }
 
     func delete(assetID: String) async {
@@ -381,5 +403,6 @@ final class AppStore {
         } catch {
             lastError = "Items deleted locally but some failed to delete from iCloud: \(error.localizedDescription)"
         }
+        await refreshPendingSyncCount()
     }
 }

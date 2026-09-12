@@ -109,20 +109,42 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: selectionBinding) {
+            SidebarSyncSection(pendingSyncCount: store.pendingSyncCount)
             SidebarViewsSection()
             SidebarContainersSection(containers: store.allContainers)
             SidebarTagsSection(tags: store.allTagsWithCounts)
-            SidebarStatsSection(totalCount: store.assets.count)
+            SidebarStatsSection(totalCount: store.assets.count, pendingSyncCount: store.pendingSyncCount)
         }
+    }
+}
+private struct SidebarSyncSection: View {
+    let pendingSyncCount: Int
+    var body: some View {
+        
+            Section("Sync"){
+                //LabeledContent("sync count", value: "0")
+                if pendingSyncCount > 0 {
+                    LabeledContent("Awaiting Sync", value: "\(pendingSyncCount)")
+                        .foregroundStyle(.orange)
+                }
+            }
+        
     }
 }
 
 private struct SidebarStatsSection: View {
     let totalCount: Int
+    let pendingSyncCount: Int
 
     var body: some View {
         Section("Stats") {
             LabeledContent("Total Items", value: "\(totalCount)")
+            if pendingSyncCount > 0 {
+                LabeledContent("Awaiting Sync", value: "\(pendingSyncCount)")
+                    .foregroundStyle(.orange)
+            } else {
+                LabeledContent("Awaiting Sync", value: "\(pendingSyncCount)")
+            }
         }
     }
 }

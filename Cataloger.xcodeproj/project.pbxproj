@@ -51,6 +51,14 @@
 		94BF01BC24C1573D00319C89 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */; };
 		94BF01CA24C1573D00319C89 /* CatalogerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01C924C1573D00319C89 /* CatalogerTests.swift */; };
 		94BF01D524C1573D00319C89 /* CatalogerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01D424C1573D00319C89 /* CatalogerUITests.swift */; };
+		94FD8D3430561244008AD340 /* Array+Chunked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3330561244008AD340 /* Array+Chunked.swift */; };
+		94FD8D3530561244008AD340 /* Array+Chunked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3330561244008AD340 /* Array+Chunked.swift */; };
+		94FD8D373056126E008AD340 /* CSVParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D363056126E008AD340 /* CSVParser.swift */; };
+		94FD8D383056126E008AD340 /* CSVParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D363056126E008AD340 /* CSVParser.swift */; };
+		94FD8D3A305612A3008AD340 /* CSVBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D39305612A3008AD340 /* CSVBackupManager.swift */; };
+		94FD8D3B305612A3008AD340 /* CSVBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D39305612A3008AD340 /* CSVBackupManager.swift */; };
+		94FD8D4030561315008AD340 /* TagEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3F30561315008AD340 /* TagEditorSection.swift */; };
+		94FD8D4130561315008AD340 /* TagEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3F30561315008AD340 /* TagEditorSection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -103,6 +111,10 @@
 		94BF01D424C1573D00319C89 /* CatalogerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogerUITests.swift; sourceTree = "<group>"; };
 		94BF01D624C1573D00319C89 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		94BF01E224C1575600319C89 /* Cataloger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Cataloger.entitlements; sourceTree = "<group>"; };
+		94FD8D3330561244008AD340 /* Array+Chunked.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Chunked.swift"; sourceTree = "<group>"; };
+		94FD8D363056126E008AD340 /* CSVParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVParser.swift; sourceTree = "<group>"; };
+		94FD8D39305612A3008AD340 /* CSVBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVBackupManager.swift; sourceTree = "<group>"; };
+		94FD8D3F30561315008AD340 /* TagEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSection.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -151,12 +163,15 @@
 		946814073048ECCE004A38DA /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				94FD8D3330561244008AD340 /* Array+Chunked.swift */,
 				946814013048ECCE004A38DA /* CloudKitManager.swift */,
 				946814023048ECCE004A38DA /* CSVExportManager.swift */,
+				94FD8D363056126E008AD340 /* CSVParser.swift */,
 				946814033048ECCE004A38DA /* ImageStore.swift */,
 				946814043048ECCE004A38DA /* ImgurAuthManager.swift */,
 				9468143930493C17004A38DA /* iCloudPaths.swift */,
 				946814053048ECCE004A38DA /* ImgurUploadManager.swift */,
+				94FD8D39305612A3008AD340 /* CSVBackupManager.swift */,
 				946814063048ECCE004A38DA /* LegacyMigrationManager.swift */,
 				946814353048ED08004A38DA /* HEICHelper.swift */,
 			);
@@ -166,6 +181,7 @@
 		946814103048ECCE004A38DA /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				94FD8D3F30561315008AD340 /* TagEditorSection.swift */,
 				946814083048ECCE004A38DA /* BatchActionBar.swift */,
 				946814093048ECCE004A38DA /* ContentView.swift */,
 				9468140A3048ECCE004A38DA /* ItemAddView.swift */,
@@ -377,9 +393,12 @@
 				946814153048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814163048ECCE004A38DA /* CatalogerApp.swift in Sources */,
 				946814173048ECCE004A38DA /* ImgurUploadManager.swift in Sources */,
+				94FD8D4130561315008AD340 /* TagEditorSection.swift in Sources */,
 				946814183048ECCE004A38DA /* MasterSearchBar.swift in Sources */,
+				94FD8D3430561244008AD340 /* Array+Chunked.swift in Sources */,
 				946814193048ECCE004A38DA /* ImageStore.swift in Sources */,
 				9468141A3048ECCE004A38DA /* ItemDetailView.swift in Sources */,
+				94FD8D383056126E008AD340 /* CSVParser.swift in Sources */,
 				9468141B3048ECCE004A38DA /* Asset.swift in Sources */,
 				9468141C3048ECCE004A38DA /* CloudKitManager.swift in Sources */,
 				9468141D3048ECCE004A38DA /* ImgurAuthManager.swift in Sources */,
@@ -390,6 +409,7 @@
 				946814213048ECCE004A38DA /* BatchActionBar.swift in Sources */,
 				9468143B30493C17004A38DA /* iCloudPaths.swift in Sources */,
 				946814383048FF04004A38DA /* CameraCaptureView.swift in Sources */,
+				94FD8D3B305612A3008AD340 /* CSVBackupManager.swift in Sources */,
 				946814223048ECCE004A38DA /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -411,9 +431,11 @@
 				946814243048ECCE004A38DA /* PendingMutation.swift in Sources */,
 				946814253048ECCE004A38DA /* ItemListView.swift in Sources */,
 				946814263048ECCE004A38DA /* CSVExportManager.swift in Sources */,
+				94FD8D3A305612A3008AD340 /* CSVBackupManager.swift in Sources */,
 				946814273048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814283048ECCE004A38DA /* CatalogerApp.swift in Sources */,
 				946814293048ECCE004A38DA /* ImgurUploadManager.swift in Sources */,
+				94FD8D4030561315008AD340 /* TagEditorSection.swift in Sources */,
 				9468143A30493C17004A38DA /* iCloudPaths.swift in Sources */,
 				9468142A3048ECCE004A38DA /* MasterSearchBar.swift in Sources */,
 				9468142B3048ECCE004A38DA /* ImageStore.swift in Sources */,
@@ -425,6 +447,8 @@
 				946814313048ECCE004A38DA /* LegacyMigrationManager.swift in Sources */,
 				946814323048ECCE004A38DA /* QRScannerView.swift in Sources */,
 				946814333048ECCE004A38DA /* BatchActionBar.swift in Sources */,
+				94FD8D3530561244008AD340 /* Array+Chunked.swift in Sources */,
+				94FD8D373056126E008AD340 /* CSVParser.swift in Sources */,
 				946814343048ECCE004A38DA /* ContentView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

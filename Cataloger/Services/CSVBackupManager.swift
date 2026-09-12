@@ -28,7 +28,7 @@ enum CSVBackupManager {
 
     private static let expectedHeader = [
         "Name", "Description", "Container Location", "Tags",
-        "QR UUID", "Imgur URL", "Checked Out", "System UUID"
+        "QR UUID", "Imgur URL", "Checked Out", "System UUID", "Created At"
     ]
 
     /// Parses the file and classifies each row as update-vs-create against
@@ -42,14 +42,18 @@ enum CSVBackupManager {
         var rows = CSVParser.parse(contents)
         guard !rows.isEmpty else { throw RestoreError.emptyFile }
 
-        // Drop the header row if present; tolerate its absence defensively.
-        if let first = rows.first, first.map({ $0.trimmingCharacters(in: .whitespaces) }) == expectedHeader {
+        // Detect the header by its first cell rather than requiring an
+        // exact full-row match against `expectedHeader` — tolerates older
+        // exports (from before the "Created At" column existed) without
+        // treating the header itself as a malformed data row.
+        if let first = rows.first, first.first?.trimmingCharacters(in: .whitespaces) == "Name" {
             rows.removeFirst()
         }
 
         let existingIDs = Set(existingAssets.map(\.id))
         var restored: [Asset] = []
         var skipped = 0
+        let dateFormatter = ISO8601DateFormatter()
 
         for row in rows {
             guard row.count >= 8 else { skipped += 1; continue }
@@ -67,6 +71,13 @@ enum CSVBackupManager {
             let imgurURL = row[5].trimmingCharacters(in: .whitespaces)
             let isCheckedOut = row[6].trimmingCharacters(in: .whitespaces).lowercased() == "true"
             let systemUUID = row[7].trimmingCharacters(in: .whitespaces)
+            // "Created At" is column 9 — absent in exports from before this
+            // field existed, so fall back to "now" rather than failing the
+            // whole row on an older backup file.
+            let createdAt: Date = {
+                guard row.count > 8 else { return Date() }
+                return dateFormatter.date(from: row[8].trimmingCharacters(in: .whitespaces)) ?? Date()
+            }()
 
             let asset = Asset(
                 id: systemUUID.isEmpty ? UUID().uuidString : systemUUID,
@@ -76,7 +87,8 @@ enum CSVBackupManager {
                 tags: tags,
                 qrcodeUUID: qrUUID.isEmpty ? nil : qrUUID,
                 imgurURLString: imgurURL.isEmpty ? nil : imgurURL,
-                isCheckedOut: isCheckedOut
+                isCheckedOut: isCheckedOut,
+                createdAt: createdAt
             )
             restored.append(asset)
         }

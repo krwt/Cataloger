@@ -27,7 +27,10 @@ actor CloudKitManager {
     // MARK: - Setup
 
     /// Creates the custom zone + push subscription. Call once at app launch.
-    func bootstrap() async throws {
+    /// Returns how many previously-queued offline mutations still failed
+    /// after this retry attempt (0 if none, or if there was nothing queued).
+    @discardableResult
+    func bootstrap() async throws -> Int {
         let zone = CKRecordZone(zoneID: zoneID)
         _ = try await database.save(zone)
 
@@ -37,7 +40,15 @@ actor CloudKitManager {
         subscription.notificationInfo = notificationInfo
         _ = try? await database.save(subscription)
 
-        await flushOfflineLedger()
+        return await flushOfflineLedger()
+    }
+
+    /// Current count of mutations still waiting to sync (queued because a
+    /// previous attempt failed). Exposed so the UI can show "N items
+    /// awaiting sync" without needing to know about the ledger's storage
+    /// format.
+    func pendingMutationCount() -> Int {
+        ledger.load().count
     }
 
     // MARK: - Fetch
@@ -141,10 +152,13 @@ actor CloudKitManager {
     /// one `deleteRecord` round-trip per item awaited sequentially. The
     /// sequential version was slow enough for large collections that
     /// users would close the app before it finished — this is the delete
-    /// counterpart to `batchUpsert`.
+    /// counterpart to `batchUpsert`. Any record that fails is queued into
+    /// the offline ledger, same as single-item delete, so it's retried on
+    /// next launch instead of being silently dropped.
     func batchDelete(assetIDs: [String]) async throws {
         let recordIDs = assetIDs.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
         var firstError: Error?
+        var failedIDs: [String] = []
 
         for chunk in recordIDs.chunked(into: Self.maxBatchSize) {
             do {
@@ -154,17 +168,22 @@ actor CloudKitManager {
                     savePolicy: .changedKeys,
                     atomically: false
                 )
-                for (_, deleteResult) in result.deleteResults {
-                    if case .failure(let error) = deleteResult, firstError == nil {
-                        firstError = error
+                for (recordID, deleteResult) in result.deleteResults {
+                    if case .failure(let error) = deleteResult {
+                        if firstError == nil { firstError = error }
+                        failedIDs.append(recordID.recordName)
                     }
                 }
             } catch {
-                // Keep going even if a whole chunk fails (e.g. a transient
-                // network blip) — later chunks may still succeed, and we'd
-                // rather persist as much as possible than give up early.
+                // Whole chunk failed outright (e.g. network) — queue every
+                // ID in this chunk for retry, not just log an error.
                 if firstError == nil { firstError = error }
+                failedIDs.append(contentsOf: chunk.map(\.recordName))
             }
+        }
+
+        for id in failedIDs {
+            ledger.append(PendingMutation(kind: .delete, assetID: id, assetPayload: nil))
         }
 
         if let firstError { throw firstError }
@@ -172,11 +191,17 @@ actor CloudKitManager {
 
     /// Batch-commits an array of assets (used by legacy .mcs migration and
     /// CSV restore), automatically chunked to stay under CloudKit's
-    /// per-request record limit.
+    /// per-request record limit. Any asset that fails to save is queued
+    /// into the offline ledger with its full payload, same as single-item
+    /// save, so it's retried on next launch instead of being lost.
     func batchUpsert(_ assets: [Asset]) async throws {
         let zoneID = self.zoneID
+        let assetsByRecordID = Dictionary(
+            uniqueKeysWithValues: assets.map { (CKRecord.ID(recordName: $0.id, zoneID: zoneID), $0) }
+        )
         let records = assets.map { $0.toRecord(zoneID: zoneID) }
         var firstError: Error?
+        var failedAssets: [Asset] = []
 
         for chunk in records.chunked(into: Self.maxBatchSize) {
             do {
@@ -190,14 +215,25 @@ actor CloudKitManager {
                 // the whole chunk — but we still want to surface if
                 // anything failed, rather than silently reporting success
                 // while some records never actually made it to CloudKit.
-                for (_, saveResult) in result.saveResults {
-                    if case .failure(let error) = saveResult, firstError == nil {
-                        firstError = error
+                for (recordID, saveResult) in result.saveResults {
+                    if case .failure(let error) = saveResult {
+                        if firstError == nil { firstError = error }
+                        if let asset = assetsByRecordID[recordID] {
+                            failedAssets.append(asset)
+                        }
                     }
                 }
             } catch {
                 if firstError == nil { firstError = error }
+                let chunkRecordIDs = Set(chunk.map(\.recordID))
+                failedAssets.append(contentsOf: assetsByRecordID.compactMap { key, value in
+                    chunkRecordIDs.contains(key) ? value : nil
+                })
             }
+        }
+
+        for asset in failedAssets {
+            ledger.append(PendingMutation(kind: .upsert, assetID: asset.id, assetPayload: asset))
         }
 
         if let firstError { throw firstError }
@@ -209,10 +245,13 @@ actor CloudKitManager {
     /// launch (via `bootstrap()`). No external asset lookup needed anymore:
     /// each mutation now carries its own payload, so this works correctly
     /// even in a brand-new app session with an empty in-memory asset list.
-    func flushOfflineLedger() async {
+    /// Returns how many mutations still failed after this attempt — used
+    /// to surface a real alert instead of retrying forever in silence.
+    @discardableResult
+    func flushOfflineLedger() async -> Int {
         isReachable = true
         let pending = ledger.load()
-        guard !pending.isEmpty else { return }
+        guard !pending.isEmpty else { return 0 }
 
         var remaining: [PendingMutation] = []
         for mutation in pending {
@@ -229,6 +268,7 @@ actor CloudKitManager {
             }
         }
         ledger.save(remaining)
+        return remaining.count
     }
 
     private func markUnreachable() {

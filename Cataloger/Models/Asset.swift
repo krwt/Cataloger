@@ -12,6 +12,12 @@ struct Asset: Identifiable, Hashable, Codable {
     var imgurURLString: String?
     var isCheckedOut: Bool
     var modifiedAt: Date               // used for last-write-wins conflict resolution
+    /// Set once, at the moment the item is first ever saved, and never
+    /// touched again by any subsequent edit. This is what the list sorts
+    /// by ("latest addition on top") — sorting by `modifiedAt` instead
+    /// would reorder the whole list every time someone just edits a
+    /// description, which isn't what "chronological by addition" means.
+    var createdAt: Date
 
     static let tagDelimiter = "│"
     /// Characters that are blocked from Name / Description / Container / Tag fields
@@ -27,7 +33,8 @@ struct Asset: Identifiable, Hashable, Codable {
         qrcodeUUID: String? = nil,
         imgurURLString: String? = nil,
         isCheckedOut: Bool = false,
-        modifiedAt: Date = Date()
+        modifiedAt: Date = Date(),
+        createdAt: Date = Date()
     ) {
         self.id = id
         self.name = name
@@ -38,6 +45,7 @@ struct Asset: Identifiable, Hashable, Codable {
         self.imgurURLString = imgurURLString
         self.isCheckedOut = isCheckedOut
         self.modifiedAt = modifiedAt
+        self.createdAt = createdAt
     }
 
     var qrLabelDisplayText: String {
@@ -84,6 +92,11 @@ extension Asset {
         self.imgurURLString = record["imgurURLString"] as? String
         self.isCheckedOut = (record["isCheckedOut"] as? Int64 ?? 0) == 1
         self.modifiedAt = record["modifiedAt"] as? Date ?? record.modificationDate ?? Date()
+        // Records saved before this field existed fall back to CloudKit's
+        // own system creationDate (stamped once, automatically, at first
+        // save) rather than "now" — gives a real historical value instead
+        // of clustering every pre-existing item at the moment of update.
+        self.createdAt = record["createdAt"] as? Date ?? record.creationDate ?? Date()
     }
 
     /// Builds (or updates) a CKRecord for this asset inside a given custom zone.
@@ -98,6 +111,7 @@ extension Asset {
         record["imgurURLString"] = (imgurURLString ?? "") as CKRecordValue
         record["isCheckedOut"] = (isCheckedOut ? 1 : 0) as CKRecordValue
         record["modifiedAt"] = modifiedAt as CKRecordValue
+        record["createdAt"] = createdAt as CKRecordValue
         return record
     }
 }

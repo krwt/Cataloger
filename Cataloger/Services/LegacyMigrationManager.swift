@@ -40,6 +40,14 @@ enum LegacyMigrationManager {
         var assets: [Asset] = []
         var skipped: [Int] = []
 
+        // v1's .mcs format has no timestamp field at all — line position is
+        // the only signal available for chronological order. Assign each
+        // row a synthetic, strictly-increasing timestamp based on its
+        // position in the file, anchored far enough in the past that any
+        // item added today in the new app always sorts above the entire
+        // imported batch.
+        let anchorDate = Date(timeIntervalSince1970: 0)
+
         for (index, line) in lines.enumerated() {
             let fields = line.components(separatedBy: ",")
 
@@ -61,6 +69,7 @@ enum LegacyMigrationManager {
             let imgurURL = field(3)
             let systemUUID = field(4).isEmpty ? UUID().uuidString : field(4)
             let qrUUID = field(5)
+            let syntheticCreatedAt = anchorDate.addingTimeInterval(TimeInterval(index))
 
             let asset = Asset(
                 id: systemUUID,
@@ -70,7 +79,9 @@ enum LegacyMigrationManager {
                 tags: [],                      // migrated assets start with no tags
                 qrcodeUUID: qrUUID.isEmpty ? nil : qrUUID,
                 imgurURLString: imgurURL.isEmpty ? nil : imgurURL,
-                isCheckedOut: false
+                isCheckedOut: false,
+                modifiedAt: syntheticCreatedAt,
+                createdAt: syntheticCreatedAt
             )
             assets.append(asset)
         }

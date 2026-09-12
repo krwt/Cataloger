@@ -6,15 +6,24 @@ import Foundation
 enum CSVExportManager {
 
     static let fileName = "backup.csv"
-    private static let header = ["Name", "Description", "Container Location", "Tags", "QR UUID", "Imgur URL", "Checked Out", "System UUID"]
+    private static let header = [
+        "Name", "Description", "Container Location", "Tags",
+        "QR UUID", "Imgur URL", "Checked Out", "System UUID", "Created At"
+    ]
 
     /// Writes the current in-memory asset set to `backup.csv` inside the
-    /// app's iCloud Documents directory. Returns the file URL on success.
+    /// app's iCloud Documents directory, oldest item first. Restore
+    /// doesn't actually depend on this row order (it re-sorts by the
+    /// "Created At" column explicitly), but writing it oldest-first reads
+    /// naturally and matches the original .mcs append-log feel. Returns
+    /// the file URL on success.
     @discardableResult
     static func export(assets: [Asset], to directory: URL) throws -> URL {
+        let sortedAssets = assets.sorted { $0.createdAt < $1.createdAt }
         var rows: [String] = [header.map(csvField).joined(separator: ",")]
 
-        for asset in assets {
+        let formatter = ISO8601DateFormatter()
+        for asset in sortedAssets {
             let tagsField = asset.tags.joined(separator: Asset.tagDelimiter)
             let row = [
                 asset.name,
@@ -24,7 +33,8 @@ enum CSVExportManager {
                 asset.qrcodeUUID ?? "",
                 asset.imgurURLString ?? "",
                 asset.isCheckedOut ? "true" : "false",
-                asset.id
+                asset.id,
+                formatter.string(from: asset.createdAt)
             ].map(csvField).joined(separator: ",")
             rows.append(row)
         }
