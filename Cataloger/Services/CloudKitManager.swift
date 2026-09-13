@@ -51,6 +51,13 @@ actor CloudKitManager {
         ledger.load().count
     }
 
+    /// The queued mutations themselves. Each `.upsert` carries a full
+    /// `Asset` payload, so callers can show locally-made-but-not-yet-synced
+    /// work without waiting for (or depending on) a successful push.
+    func pendingMutations() -> [PendingMutation] {
+        ledger.load()
+    }
+
     // MARK: - Fetch
 
     /// Pulls the full asset set for initial load / manual refresh.

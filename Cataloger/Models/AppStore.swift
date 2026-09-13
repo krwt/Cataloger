@@ -218,6 +218,11 @@ final class AppStore {
         Task { await ImageStore.prepare() }
 
         isLoading = true
+
+        // Read the offline queue BEFORE the flush drains it — these payloads
+        // are the only local record of work done while offline.
+        let pending = await cloudKit.pendingMutations()
+
         do {
             // Fetched FIRST, before zone/subscription setup and the ledger
             // flush. Those are two-plus network round-trips that only
@@ -227,10 +232,19 @@ final class AppStore {
             // `unknownItem` — which `fetchAllAssets` already catches and
             // reports as empty, so running it first is safe.
             assets = try await cloudKit.fetchAllAssets()
-            bumpRevision()
         } catch {
             lastError = "Could not connect to iCloud: \(error.localizedDescription)"
         }
+
+        // The fetch returns SERVER state, which by definition predates
+        // anything still sitting in the offline queue. Without this merge,
+        // items added offline stay invisible until the flush finishes and
+        // the user manually pulls to refresh. Applying the queued payloads
+        // locally shows that work immediately — and still works when the
+        // fetch itself failed, so a fully-offline relaunch shows offline
+        // additions rather than nothing.
+        applyPendingLocally(pending)
+        bumpRevision()
         isLoading = false
 
         // Zone + subscription setup and the offline-ledger replay happen
@@ -240,6 +254,17 @@ final class AppStore {
             if stillFailedCount > 0 {
                 lastError = "\(stillFailedCount) item(s) still couldn't sync to iCloud after retrying. They're saved on this device and will keep retrying — check your internet connection."
             }
+            // If anything actually flushed, re-read the server so local
+            // state matches what CloudKit resolved (last-write-wins may
+            // have picked a different winner than the local payload).
+            // Whatever is *still* queued gets re-merged on top.
+            if !pending.isEmpty && stillFailedCount < pending.count {
+                if let fresh = try? await cloudKit.fetchAllAssets() {
+                    assets = fresh
+                    applyPendingLocally(await cloudKit.pendingMutations())
+                    bumpRevision()
+                }
+            }
         } catch {
             // Don't clobber a fetch error that's already being shown.
             if lastError == nil {
@@ -247,6 +272,33 @@ final class AppStore {
             }
         }
         await refreshPendingSyncCount()
+    }
+
+    /// Replays queued mutations over the in-memory asset list so unsynced
+    /// local work is visible. Purely local — touches no network and does
+    /// not consume the queue; the real push is `flushOfflineLedger`.
+    private func applyPendingLocally(_ mutations: [PendingMutation]) {
+        guard !mutations.isEmpty else { return }
+
+        var byID = Dictionary(assets.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+
+        for mutation in mutations {
+            switch mutation.kind {
+            case .upsert:
+                guard let payload = mutation.assetPayload else { continue }
+                // Same last-write-wins rule the server applies, so a queued
+                // edit never resurrects over a newer remote version.
+                if let existing = byID[payload.id], existing.modifiedAt > payload.modifiedAt {
+                    continue
+                }
+                byID[payload.id] = payload
+            case .delete:
+                byID.removeValue(forKey: mutation.assetID)
+            }
+        }
+
+        // Array order doesn't matter — `visibleAssets` sorts by `createdAt`.
+        assets = Array(byID.values)
     }
 
     /// Refreshes the visible "N items awaiting sync" count from the
@@ -259,6 +311,10 @@ final class AppStore {
     func refresh() async {
         do {
             assets = try await cloudKit.fetchAllAssets()
+            // Same reasoning as bootstrap: the server doesn't know about
+            // still-queued work yet, so a bare fetch would make offline
+            // additions disappear from the list mid-session.
+            applyPendingLocally(await cloudKit.pendingMutations())
             bumpRevision()
         } catch {
             lastError = "Refresh failed: \(error.localizedDescription)"
