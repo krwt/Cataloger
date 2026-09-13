@@ -59,6 +59,8 @@
 		94FD8D3B305612A3008AD340 /* CSVBackupManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D39305612A3008AD340 /* CSVBackupManager.swift */; };
 		94FD8D4030561315008AD340 /* TagEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3F30561315008AD340 /* TagEditorSection.swift */; };
 		94FD8D4130561315008AD340 /* TagEditorSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3F30561315008AD340 /* TagEditorSection.swift */; };
+		94FD8D4330562273008AD340 /* LabelGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D4230562273008AD340 /* LabelGenerator.swift */; };
+		94FD8D4430562273008AD340 /* LabelGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D4230562273008AD340 /* LabelGenerator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -115,6 +117,7 @@
 		94FD8D363056126E008AD340 /* CSVParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVParser.swift; sourceTree = "<group>"; };
 		94FD8D39305612A3008AD340 /* CSVBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVBackupManager.swift; sourceTree = "<group>"; };
 		94FD8D3F30561315008AD340 /* TagEditorSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TagEditorSection.swift; sourceTree = "<group>"; };
+		94FD8D4230562273008AD340 /* LabelGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LabelGenerator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -163,6 +166,7 @@
 		946814073048ECCE004A38DA /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				94FD8D4230562273008AD340 /* LabelGenerator.swift */,
 				94FD8D3330561244008AD340 /* Array+Chunked.swift */,
 				946814013048ECCE004A38DA /* CloudKitManager.swift */,
 				946814023048ECCE004A38DA /* CSVExportManager.swift */,
@@ -398,6 +402,7 @@
 				94FD8D3430561244008AD340 /* Array+Chunked.swift in Sources */,
 				946814193048ECCE004A38DA /* ImageStore.swift in Sources */,
 				9468141A3048ECCE004A38DA /* ItemDetailView.swift in Sources */,
+				94FD8D4330562273008AD340 /* LabelGenerator.swift in Sources */,
 				94FD8D383056126E008AD340 /* CSVParser.swift in Sources */,
 				9468141B3048ECCE004A38DA /* Asset.swift in Sources */,
 				9468141C3048ECCE004A38DA /* CloudKitManager.swift in Sources */,
@@ -435,6 +440,7 @@
 				946814273048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814283048ECCE004A38DA /* CatalogerApp.swift in Sources */,
 				946814293048ECCE004A38DA /* ImgurUploadManager.swift in Sources */,
+				94FD8D4430562273008AD340 /* LabelGenerator.swift in Sources */,
 				94FD8D4030561315008AD340 /* TagEditorSection.swift in Sources */,
 				9468143A30493C17004A38DA /* iCloudPaths.swift in Sources */,
 				9468142A3048ECCE004A38DA /* MasterSearchBar.swift in Sources */,
@@ -596,7 +602,18 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Cataloger/Preview Content\"";
 				DEVELOPMENT_TEAM = Y9QBB3ZA77;
 				DRIVERKIT_DEPLOYMENT_TARGET = 24.6;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = YES;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				INFOPLIST_FILE = Cataloger/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -631,7 +648,18 @@
 				DEVELOPMENT_ASSET_PATHS = "\"Cataloger/Preview Content\"";
 				DEVELOPMENT_TEAM = Y9QBB3ZA77;
 				DRIVERKIT_DEPLOYMENT_TARGET = 24.6;
+				ENABLE_APP_SANDBOX = YES;
+				ENABLE_INCOMING_NETWORK_CONNECTIONS = NO;
+				ENABLE_OUTGOING_NETWORK_CONNECTIONS = NO;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_RESOURCE_ACCESS_AUDIO_INPUT = NO;
+				ENABLE_RESOURCE_ACCESS_BLUETOOTH = NO;
+				ENABLE_RESOURCE_ACCESS_CALENDARS = NO;
+				ENABLE_RESOURCE_ACCESS_CAMERA = NO;
+				ENABLE_RESOURCE_ACCESS_CONTACTS = NO;
+				ENABLE_RESOURCE_ACCESS_LOCATION = NO;
+				ENABLE_RESOURCE_ACCESS_PRINTING = YES;
+				ENABLE_RESOURCE_ACCESS_USB = NO;
 				INFOPLIST_FILE = Cataloger/Info.plist;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

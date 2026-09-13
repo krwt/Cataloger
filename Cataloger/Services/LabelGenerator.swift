@@ -6,7 +6,34 @@ import CoreImage
 import UIKit
 
 public struct LabelGenerator {
-    
+    // --- ADDED THIS METHOD INSIDE THE STRUCT CONTAINER ---
+    /// Bypasses the iOS sharing menu and routes the generated PDF data stream directly to AirPrint hardware engines.
+    public static func printDirectly(pdfDocument: PDFDocument, jobName: String = "Amazon Labels Job") {
+        guard let pdfData = pdfDocument.dataRepresentation() else {
+            print("Failed to generate printable data representation from PDF.")
+            return
+        }
+        
+        let printController = UIPrintInteractionController.shared
+        
+        let printInfo = UIPrintInfo(dictionary: nil)
+        printInfo.outputType = .general
+        printInfo.jobName = jobName
+        printInfo.duplex = .none // Thermal labels should never duplex print
+        
+        printController.printInfo = printInfo
+        printController.printingItem = pdfData
+            
+        printController.present(animated: true) { (controller, completed, error) in
+            if let error = error {
+                print("AirPrint system error encountered: \(error.localizedDescription)")
+            } else if completed {
+                print("Document safely transmitted to printer.")
+            } else {
+                print("User canceled the print transaction.")
+            }
+        }
+    }
     // Inches to Points (PDFKit utilizes points: 1 inch = 72 points)
     private static func inch(_ value: CGFloat) -> CGFloat {
         return value * 72.0

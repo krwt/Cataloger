@@ -10,7 +10,7 @@ struct ItemRowView: View {
             Button {
                 showImagePreview = true
             } label: {
-                ThumbnailView(asset: asset)
+                ThumbnailView(asset: asset, allowRemoteLoad: store.preloadAllImages)
                     .frame(width: 48, height: 48)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
             }
@@ -66,11 +66,19 @@ struct ItemRowView: View {
 /// Hybrid Imgur-primary / local-fallback thumbnail per the v1 image pipeline.
 struct ThumbnailView: View {
     let asset: Asset
+    /// When false, skips the network fetch entirely and shows the local
+    /// cache or placeholder instead — used by list rows (opt-in via the
+    /// "Preload All Images" setting) since fetching every row's remote
+    /// image as it scrolls into view can be a lot of network activity for
+    /// a large collection. Detail view and the full-screen preview always
+    /// pass `true` (the default) since those are explicit navigations
+    /// where showing the real image is expected.
+    var allowRemoteLoad: Bool = true
     @State private var localImage: UIImage?
 
     var body: some View {
         Group {
-            if let urlString = asset.imgurURLString, let url = URL(string: urlString) {
+            if allowRemoteLoad, let urlString = asset.imgurURLString, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -94,8 +102,14 @@ struct ThumbnailView: View {
     private var fallbackOrPlaceholder: some View {
         if let data = ImageStore.loadLocalImage(assetID: asset.id), let uiImage = UIImage(data: data) {
             Image(uiImage: uiImage).resizable().aspectRatio(contentMode: .fill)
+        } else if let urlString = asset.imgurURLString, !urlString.isEmpty {
+            // The item does have an image — it just isn't showing right now
+            // (network issue, or preload-off skipped fetching it). Distinct
+            // from "no image was ever attached" below.
+            Image(systemName: "photo")
+                .foregroundStyle(Color.secondary)
         } else {
-            Image(systemName: "shippingbox")
+            Image(systemName: "questionmark")
                 .foregroundStyle(Color.secondary)
         }
     }

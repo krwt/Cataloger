@@ -51,6 +51,17 @@ final class AppStore {
         }
     }
 
+    /// Off by default: list rows show a placeholder instead of fetching
+    /// each item's Imgur image, since eagerly loading images for every row
+    /// as they scroll into view can mean a lot of network activity for a
+    /// large collection. Turning this on restores the old always-load
+    /// behavior. Detail view and the full-screen preview always load the
+    /// real image regardless of this setting — it only governs list rows.
+    var preloadAllImages: Bool {
+        get { UserDefaults.standard.bool(forKey: "preloadAllImages") }
+        set { UserDefaults.standard.set(newValue, forKey: "preloadAllImages") }
+    }
+
     // Imgur OAuth state, passed through from ImgurAuthManager for view binding.
     var imgurIsLoggedIn: Bool { ImgurAuthManager.shared.isLoggedIn }
     var imgurUserName: String? { ImgurAuthManager.shared.userName }

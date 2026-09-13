@@ -16,6 +16,11 @@ struct MasterSearchBar: View {
     @State private var showDeleteAllWarning1 = false
     @State private var showDeleteAllWarning2 = false
 
+    // Labels Module State Variables
+    @State private var showLabelPagePrompt = false
+    @State private var labelPageCountString = "1"
+    @State private var generatedLabelsURL: URL? = nil
+
     var body: some View {
         @Bindable var store = store
 
@@ -31,20 +36,21 @@ struct MasterSearchBar: View {
                     onRestoreCSV: { closeMenuThen { showCSVRestoreImporter = true } },
                     onImportLegacy: { closeMenuThen { showLegacyImporter = true } },
                     onImgurSettings: { closeMenuThen { showImgurSettings = true } },
+                    onGenerateLabels: { closeMenuThen { showLabelPagePrompt = true } },
                     onDeleteAll: { closeMenuThen { showDeleteAllWarning1 = true } }
-                )
+                ).environment(store)
                 .frame(minWidth: 260)
             }
 
             HStack {
                 Image(systemName: "magnifyingglass")
-                HStack{
+                HStack {
                     TextField("Search Items, SKUs, or Tags...", text: $store.searchText)
                         .focused($isSearchFocused)
                         .textFieldStyle(.plain)
                     Button {
                         store.searchText = ""
-                    } label:{
+                    } label: {
                         Image(systemName: "xmark.circle")
                     }
                 }.padding()
@@ -97,6 +103,19 @@ struct MasterSearchBar: View {
         }
         .sheet(isPresented: $showImgurSettings) {
             ImgurSettingsView()
+        }
+        // MARK: Label Prompt and Automated Handling
+        .alert("Generate Amazon Labels", isPresented: $showLabelPagePrompt) {
+            TextField("Number of Pages", text: $labelPageCountString)
+                .keyboardType(.numberPad)
+            
+            Button("Cancel", role: .cancel) { }
+            Button("Generate", action: handleLabelGenerationAction) // <-- CLEANED UP: Moved long logic to external helper function below
+        } message: {
+            Text("Enter how many 20-label matrix pages (4x6 format) you want to generate.")
+        }
+        .sheet(item: $generatedLabelsURL) { url in
+            ShareSheetWrapper(activityItems: [url])
         }
         .alert("Exported", isPresented: .constant(exportedFileURL != nil), presenting: exportedFileURL) { _ in
             Button("OK") { exportedFileURL = nil }
@@ -164,11 +183,30 @@ struct MasterSearchBar: View {
         }
     }
 
-    /// Closes the `•••` popover first, then runs `action` after its
-    /// dismissal animation actually finishes. Without this delay, firing
-    /// another presentation (file importer, sheet) in the same tap as the
-    /// popover's dismissal causes "already presenting" UIKit conflicts,
-    /// since SwiftUI's popover dismissal isn't synchronous.
+    // MARK: - Isolated Helper Functions
+
+    /// Separating this complex logic into an independent function dramatically relieves SwiftUI compiler type-checking bottlenecks.
+    private func handleLabelGenerationAction() {
+        let cleanCount = Int(labelPageCountString) ?? 1
+        let pdfDoc = LabelGenerator.generateLabels(totalPages: cleanCount, logoImageName: "cataloger-reverse")
+        
+        let isMac = ProcessInfo.processInfo.isMacCatalystApp || ProcessInfo.processInfo.isiOSAppOnMac
+        
+        if isMac {
+            print("🚀 MAC RUNTIME DETECTED: Triggering Direct Print Panel.")
+            LabelGenerator.printDirectly(pdfDocument: pdfDoc, jobName: "Amazon Thermal Labels")
+        } else {
+            print("📱 MOBILE RUNTIME DETECTED: Opening Share Sheet wrapper.")
+            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("AmazonLabels.pdf")
+            do {
+                try pdfDoc.dataRepresentation()?.write(to: tempURL)
+                self.generatedLabelsURL = tempURL
+            } catch {
+                store.lastError = error.localizedDescription
+            }
+        }
+    }
+
     private func closeMenuThen(_ action: @escaping () -> Void) {
         showContextMenu = false
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -187,19 +225,31 @@ struct MasterSearchBar: View {
 
 /// Content of the `•••` contextual menu panel.
 struct ContextMenuPanel: View {
+    @Environment(AppStore.self) private var store
     var onExportCSV: () -> Void
     var onRestoreCSV: () -> Void
     var onImportLegacy: () -> Void
     var onImgurSettings: () -> Void
+    var onGenerateLabels: () -> Void // <-- ADDED for qrcode labels
     var onDeleteAll: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 20) {
             Button("Imgur Account Settings", systemImage: "person.crop.circle", action: onImgurSettings)
             Divider()
+            Button("Generate Amazon Labels", systemImage: "printer", action: onGenerateLabels)
+            Divider()
             Button("Export to .csv (readable file)", systemImage: "square.and.arrow.up", action: onExportCSV)
+            Divider()
             Button("Restore from Backup (.csv)", systemImage: "arrow.clockwise.icloud", action: onRestoreCSV)
             Button("Import Legacy .mcs File", systemImage: "tray.and.arrow.down", action: onImportLegacy)
+            Divider()
+            Toggle(isOn: Binding(
+                          get: { store.preloadAllImages },
+                          set: { store.preloadAllImages = $0 }
+                      )) {
+                          Label("Preload All Images in List", systemImage: "photo.stack")
+                      }
             Divider()
             Button("Delete All Items", systemImage: "trash", role: .destructive, action: onDeleteAll)
         }
@@ -288,4 +338,20 @@ struct ImgurSettingsView: View {
             }
         }
     }
+}
+
+// Extends URL to work natively with SwiftUI .sheet(item:) mechanics
+extension URL: Identifiable {
+    public var id: String { self.absoluteString }
+}
+
+// Bridges UIKit UIActivityViewController cleanly into SwiftUI layouts
+struct ShareSheetWrapper: UIViewControllerRepresentable {
+    let activityItems: [Any]
+    
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        return UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+    }
+    
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
