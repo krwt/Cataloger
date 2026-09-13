@@ -73,6 +73,20 @@ struct ItemListView: View {
                 .listStyle(.plain)
                 .environment(\.editMode, .constant(isSelectMode ? .active : .inactive))
                 .refreshable { await store.refresh() }
+                .overlay {
+                    // `isLoading` was set by bootstrap() but read by nothing,
+                    // so a cold launch rendered an empty list with no
+                    // indication anything was happening — it read as "no
+                    // items" rather than "still loading".
+                    if store.isLoading && store.visibleAssets.isEmpty {
+                        ProgressView("Loading items…")
+                    } else if store.visibleAssets.isEmpty {
+                        ContentUnavailableView(
+                            store.searchText.isEmpty ? "No Items" : "No Matches",
+                            systemImage: store.searchText.isEmpty ? "shippingbox" : "magnifyingglass"
+                        )
+                    }
+                }
                 .overlay(alignment: .bottom) {
                     if store.selectedAssetIDs.count > 1 {
                         BatchActionBar(selectedIDs: store.selectedAssetIDs)

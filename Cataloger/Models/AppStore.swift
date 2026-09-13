@@ -211,23 +211,42 @@ final class AppStore {
     }
 
     func bootstrap() async {
+        // Fire-and-forget: resolving the iCloud ubiquity container is slow,
+        // and nothing about loading the asset list depends on it. It only
+        // needs to finish before a thumbnail renders, so awaiting it here
+        // just delayed the list for no reason.
+        Task { await ImageStore.prepare() }
+
         isLoading = true
-        defer { isLoading = false }
-        // Resolves the iCloud ubiquity container once, off the main thread,
-        // before any view tries to render a thumbnail. Otherwise the first
-        // view that needs it pays that blocking lookup mid-render.
-        await ImageStore.prepare()
         do {
-            let stillFailedCount = try await cloudKit.bootstrap()
+            // Fetched FIRST, before zone/subscription setup and the ledger
+            // flush. Those are two-plus network round-trips that only
+            // matter for writes, and putting them ahead of the fetch meant
+            // the list couldn't appear until they finished. On a brand-new
+            // container the zone doesn't exist yet and this throws
+            // `unknownItem` — which `fetchAllAssets` already catches and
+            // reports as empty, so running it first is safe.
             assets = try await cloudKit.fetchAllAssets()
             bumpRevision()
-            await refreshPendingSyncCount()
+        } catch {
+            lastError = "Could not connect to iCloud: \(error.localizedDescription)"
+        }
+        isLoading = false
+
+        // Zone + subscription setup and the offline-ledger replay happen
+        // after the list is already on screen.
+        do {
+            let stillFailedCount = try await cloudKit.bootstrap()
             if stillFailedCount > 0 {
                 lastError = "\(stillFailedCount) item(s) still couldn't sync to iCloud after retrying. They're saved on this device and will keep retrying — check your internet connection."
             }
         } catch {
-            lastError = "Could not connect to iCloud: \(error.localizedDescription)"
+            // Don't clobber a fetch error that's already being shown.
+            if lastError == nil {
+                lastError = "Could not connect to iCloud: \(error.localizedDescription)"
+            }
         }
+        await refreshPendingSyncCount()
     }
 
     /// Refreshes the visible "N items awaiting sync" count from the

@@ -96,6 +96,23 @@ actor CloudKitManager {
 
     // MARK: - Write
 
+    /// Performs the actual CloudKit write with last-write-wins resolution,
+    /// WITHOUT touching the offline ledger or reachability state. Used by
+    /// `upsert` (which adds the queueing behavior around it) and by
+    /// `flushOfflineLedger` (which must not re-queue what it's draining).
+    private func performUpsert(_ asset: Asset) async throws -> Asset {
+        let recordID = CKRecord.ID(recordName: asset.id, zoneID: zoneID)
+        let existing = try? await database.record(for: recordID)
+        if let existing, let existingAsset = Asset(record: existing),
+           existingAsset.modifiedAt > asset.modifiedAt {
+            // Remote copy is newer -> remote wins (last-write-wins by timestamp).
+            return existingAsset
+        }
+        let record = asset.toRecord(zoneID: zoneID, existing: existing)
+        let saved = try await database.save(record)
+        return Asset(record: saved) ?? asset
+    }
+
     /// Saves (creates or updates) an asset. Applies last-write-wins conflict
     /// resolution: if the remote record is newer than `asset.modifiedAt`,
     /// the remote wins and is returned instead of overwriting it blindly.
@@ -106,18 +123,10 @@ actor CloudKitManager {
             return asset
         }
 
-        let recordID = CKRecord.ID(recordName: asset.id, zoneID: zoneID)
         do {
-            let existing = try? await database.record(for: recordID)
-            if let existing, let existingAsset = Asset(record: existing),
-               existingAsset.modifiedAt > asset.modifiedAt {
-                // Remote copy is newer -> remote wins (last-write-wins by timestamp).
-                return existingAsset
-            }
-            let record = asset.toRecord(zoneID: zoneID, existing: existing)
-            let saved = try await database.save(record)
-            print("✅ CloudKit upsert succeeded for asset \(asset.id) — recordType: \(saved.recordType), zone: \(saved.recordID.zoneID)")
-            return Asset(record: saved) ?? asset
+            let resolved = try await performUpsert(asset)
+            print("✅ CloudKit upsert succeeded for asset \(asset.id)")
+            return resolved
         } catch {
             // Network / CloudKit failure -> queue for later, WITH the full
             // payload so a later app relaunch can still replay it.
@@ -128,14 +137,19 @@ actor CloudKitManager {
         }
     }
 
+    /// Ledger-free delete — see `performUpsert` for why this split exists.
+    private func performDelete(assetID: String) async throws {
+        let recordID = CKRecord.ID(recordName: assetID, zoneID: zoneID)
+        _ = try await database.deleteRecord(withID: recordID)
+    }
+
     func delete(assetID: String) async throws {
         guard isReachable else {
             ledger.append(PendingMutation(kind: .delete, assetID: assetID, assetPayload: nil))
             return
         }
-        let recordID = CKRecord.ID(recordName: assetID, zoneID: zoneID)
         do {
-            _ = try await database.deleteRecord(withID: recordID)
+            try await performDelete(assetID: assetID)
         } catch {
             markUnreachable()
             ledger.append(PendingMutation(kind: .delete, assetID: assetID, assetPayload: nil))
@@ -242,11 +256,21 @@ actor CloudKitManager {
     // MARK: - Offline ledger flushing
 
     /// Replays queued mutations — called on reconnect and on every app
-    /// launch (via `bootstrap()`). No external asset lookup needed anymore:
-    /// each mutation now carries its own payload, so this works correctly
-    /// even in a brand-new app session with an empty in-memory asset list.
-    /// Returns how many mutations still failed after this attempt — used
-    /// to surface a real alert instead of retrying forever in silence.
+    /// launch (via `bootstrap()`). Each mutation carries its own payload,
+    /// so this works even in a brand-new session with an empty asset list.
+    /// Returns how many mutations still failed after this attempt.
+    ///
+    /// Uses the ledger-free `performUpsert` / `performDelete` rather than
+    /// the public `upsert` / `delete`. That distinction is load-bearing:
+    /// the public versions queue their own failures into the ledger, and
+    /// this method ends by overwriting the ledger with `remaining` — so
+    /// anything they appended got wiped. Worse, once one failure flipped
+    /// `isReachable` to false, every later `upsert` took its early-return
+    /// guard, which appends and returns WITHOUT throwing. Those never
+    /// landed in `remaining`, and the final `save` erased their appends,
+    /// so a single mid-flush network failure silently dropped every
+    /// remaining queued mutation. Now failures are tracked here, in one
+    /// place, and nothing is lost.
     @discardableResult
     func flushOfflineLedger() async -> Int {
         isReachable = true
@@ -254,19 +278,35 @@ actor CloudKitManager {
         guard !pending.isEmpty else { return 0 }
 
         var remaining: [PendingMutation] = []
+
         for mutation in pending {
+            // Once the connection has dropped, stop hammering it — keep
+            // every remaining mutation queued for the next attempt rather
+            // than burning a failed round-trip on each one.
+            guard isReachable else {
+                remaining.append(mutation)
+                continue
+            }
+
             do {
                 switch mutation.kind {
                 case .upsert:
-                    guard let asset = mutation.assetPayload else { continue }
-                    _ = try await upsert(asset)
+                    guard let asset = mutation.assetPayload else {
+                        // No payload means this was queued by a build from
+                        // before `assetPayload` existed. There's nothing to
+                        // replay, so it's dropped rather than retried forever.
+                        continue
+                    }
+                    _ = try await performUpsert(asset)
                 case .delete:
-                    try await delete(assetID: mutation.assetID)
+                    try await performDelete(assetID: mutation.assetID)
                 }
             } catch {
+                markUnreachable()
                 remaining.append(mutation)
             }
         }
+
         ledger.save(remaining)
         return remaining.count
     }
