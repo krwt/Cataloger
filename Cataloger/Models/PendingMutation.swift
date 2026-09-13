@@ -38,9 +38,37 @@ final class OfflineLedger {
     }
 
     func append(_ mutation: PendingMutation) {
+        append(contentsOf: [mutation])
+    }
+
+    /// Queues many mutations in a single load-modify-save.
+    ///
+    /// Calling `append` in a loop costs a full decode + encode + disk write
+    /// *per mutation*, which is unusably slow for a bulk import that
+    /// write-ahead-logs several thousand payloads before starting.
+    func append(contentsOf mutations: [PendingMutation]) {
+        guard !mutations.isEmpty else { return }
         var current = load()
-        current.append(mutation)
+        current.append(contentsOf: mutations)
         save(current)
+    }
+
+    /// Removes queued mutations by mutation ID — used to retire write-ahead
+    /// entries as their batch confirms, so a kill mid-operation leaves only
+    /// the genuinely unfinished work queued.
+    func remove(ids: Set<String>) {
+        guard !ids.isEmpty else { return }
+        let remaining = load().filter { !ids.contains($0.id) }
+        save(remaining)
+    }
+
+    /// Removes queued mutations targeting the given assets, regardless of
+    /// which mutation entry they came from. Used when a batch succeeds and
+    /// we know the asset IDs rather than the mutation IDs.
+    func removeMutations(forAssetIDs assetIDs: Set<String>) {
+        guard !assetIDs.isEmpty else { return }
+        let remaining = load().filter { !assetIDs.contains($0.assetID) }
+        save(remaining)
     }
 
     func clear() {

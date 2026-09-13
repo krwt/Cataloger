@@ -101,6 +101,93 @@ actor CloudKitManager {
         return results
     }
 
+    // MARK: - Incremental fetch (change tokens)
+
+    /// What changed in the zone since the last successful incremental fetch.
+    struct ZoneChanges {
+        var changed: [Asset]
+        var deletedIDs: [String]
+    }
+
+    private var changeTokenURL: URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return docs.appendingPathComponent("zone_change_token.dat")
+    }
+
+    private func loadChangeToken() -> CKServerChangeToken? {
+        guard let data = try? Data(contentsOf: changeTokenURL) else { return nil }
+        return try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKServerChangeToken.self, from: data)
+    }
+
+    private func saveChangeToken(_ token: CKServerChangeToken?) {
+        guard let token else {
+            try? FileManager.default.removeItem(at: changeTokenURL)
+            return
+        }
+        guard let data = try? NSKeyedArchiver.archivedData(withRootObject: token, requiringSecureCoding: true) else { return }
+        try? data.write(to: changeTokenURL, options: .atomic)
+    }
+
+    /// Fetches only what changed since the stored change token, rather than
+    /// re-querying every record like `fetchAllAssets`. Two reasons this
+    /// matters: a background push wake has a hard execution budget that a
+    /// full-table query won't reliably fit inside, and this returns explicit
+    /// *deletions* — a full query can only infer those from absence, which
+    /// means it can't distinguish "deleted elsewhere" from "not fetched yet".
+    ///
+    /// With no stored token (first run) the server returns every record as a
+    /// change, which is correct but heavier — it only happens once.
+    func fetchChanges() async throws -> ZoneChanges {
+        var changed: [Asset] = []
+        var deletedIDs: [String] = []
+        var token = loadChangeToken()
+
+        while true {
+            let result: (
+                modificationResultsByID: [CKRecord.ID: Result<CKDatabase.RecordZoneChange.Modification, Error>],
+                deletions: [CKDatabase.RecordZoneChange.Deletion],
+                changeToken: CKServerChangeToken,
+                moreComing: Bool
+            )
+
+            do {
+                result = try await database.recordZoneChanges(inZoneWith: zoneID, since: token)
+            } catch let error as CKError where error.code == .changeTokenExpired {
+                // Token too old for the server to diff against. Drop it and
+                // let the caller fall back to a full fetch.
+                saveChangeToken(nil)
+                throw error
+            } catch let error as CKError where error.code == .unknownItem {
+                // Zone doesn't exist yet (brand-new container) — nothing to do.
+                return ZoneChanges(changed: [], deletedIDs: [])
+            }
+
+            for (_, modificationResult) in result.modificationResultsByID {
+                if case .success(let modification) = modificationResult,
+                   let asset = Asset(record: modification.record) {
+                    changed.append(asset)
+                }
+            }
+            for deletion in result.deletions {
+                deletedIDs.append(deletion.recordID.recordName)
+            }
+
+            token = result.changeToken
+            if !result.moreComing { break }
+        }
+
+        // Only persisted after the full page loop succeeds, so an interrupted
+        // fetch retries from the previous token instead of skipping changes.
+        saveChangeToken(token)
+        return ZoneChanges(changed: changed, deletedIDs: deletedIDs)
+    }
+
+    /// Clears the stored token so the next incremental fetch starts fresh.
+    /// Called after a full authoritative fetch, and after delete-all.
+    func resetChangeToken() {
+        saveChangeToken(nil)
+    }
+
     // MARK: - Write
 
     /// Performs the actual CloudKit write with last-write-wins resolution,
@@ -170,18 +257,28 @@ actor CloudKitManager {
     private static let maxBatchSize = 400
 
     /// Deletes many assets in a single batched CloudKit call, instead of
-    /// one `deleteRecord` round-trip per item awaited sequentially. The
-    /// sequential version was slow enough for large collections that
-    /// users would close the app before it finished — this is the delete
-    /// counterpart to `batchUpsert`. Any record that fails is queued into
-    /// the offline ledger, same as single-item delete, so it's retried on
-    /// next launch instead of being silently dropped.
+    /// one `deleteRecord` round-trip per item awaited sequentially.
+    ///
+    /// Write-ahead logged for the same reason as `batchUpsert`: a large
+    /// collection needs multiple chunked requests, so being killed partway
+    /// through used to leave CloudKit holding records the local list had
+    /// already dropped — which the next launch's authoritative fetch then
+    /// resurrected. Queuing the delete intents up front means a kill leaves
+    /// the remaining deletions queued, and they complete on next launch.
     func batchDelete(assetIDs: [String]) async throws {
+        guard !assetIDs.isEmpty else { return }
+
+        // STEP 1: write-ahead the intent.
+        ledger.append(contentsOf: assetIDs.map {
+            PendingMutation(kind: .delete, assetID: $0, assetPayload: nil)
+        })
+
         let recordIDs = assetIDs.map { CKRecord.ID(recordName: $0, zoneID: zoneID) }
         var firstError: Error?
-        var failedIDs: [String] = []
 
         for chunk in recordIDs.chunked(into: Self.maxBatchSize) {
+            var confirmedIDs: Set<String> = []
+
             do {
                 let result = try await database.modifyRecords(
                     saving: [],
@@ -190,21 +287,20 @@ actor CloudKitManager {
                     atomically: false
                 )
                 for (recordID, deleteResult) in result.deleteResults {
-                    if case .failure(let error) = deleteResult {
+                    switch deleteResult {
+                    case .success:
+                        confirmedIDs.insert(recordID.recordName)
+                    case .failure(let error):
                         if firstError == nil { firstError = error }
-                        failedIDs.append(recordID.recordName)
                     }
                 }
             } catch {
-                // Whole chunk failed outright (e.g. network) — queue every
-                // ID in this chunk for retry, not just log an error.
+                // Whole chunk failed — its entries stay queued for retry.
                 if firstError == nil { firstError = error }
-                failedIDs.append(contentsOf: chunk.map(\.recordName))
             }
-        }
 
-        for id in failedIDs {
-            ledger.append(PendingMutation(kind: .delete, assetID: id, assetPayload: nil))
+            // STEP 2: retire only what CloudKit confirmed.
+            ledger.removeMutations(forAssetIDs: confirmedIDs)
         }
 
         if let firstError { throw firstError }
@@ -212,19 +308,33 @@ actor CloudKitManager {
 
     /// Batch-commits an array of assets (used by legacy .mcs migration and
     /// CSV restore), automatically chunked to stay under CloudKit's
-    /// per-request record limit. Any asset that fails to save is queued
-    /// into the offline ledger with its full payload, same as single-item
-    /// save, so it's retried on next launch instead of being lost.
+    /// per-request record limit.
+    ///
+    /// Write-ahead logged: every asset is queued to the offline ledger
+    /// BEFORE any network work starts, and entries are retired chunk by
+    /// chunk as they confirm. This is what makes the operation survive being
+    /// killed. Appending to the ledger only on *failure* (the previous
+    /// behavior) works when a request fails — the catch block runs — but not
+    /// when the process is terminated mid-batch: no catch, no defer, and the
+    /// unwritten chunks vanish with no record they were ever meant to
+    /// happen. With the log written first, a kill at any point leaves the
+    /// unfinished work queued, and `flushOfflineLedger` finishes it on the
+    /// next launch.
     func batchUpsert(_ assets: [Asset]) async throws {
+        guard !assets.isEmpty else { return }
         let zoneID = self.zoneID
-        let assetsByRecordID = Dictionary(
-            uniqueKeysWithValues: assets.map { (CKRecord.ID(recordName: $0.id, zoneID: zoneID), $0) }
-        )
+
+        // STEP 1: write-ahead the intent, in one load-modify-save.
+        ledger.append(contentsOf: assets.map {
+            PendingMutation(kind: .upsert, assetID: $0.id, assetPayload: $0)
+        })
+
         let records = assets.map { $0.toRecord(zoneID: zoneID) }
         var firstError: Error?
-        var failedAssets: [Asset] = []
 
         for chunk in records.chunked(into: Self.maxBatchSize) {
+            var confirmedIDs: Set<String> = []
+
             do {
                 let result = try await database.modifyRecords(
                     saving: chunk,
@@ -233,28 +343,25 @@ actor CloudKitManager {
                     atomically: false
                 )
                 // atomically: false means one bad record doesn't roll back
-                // the whole chunk — but we still want to surface if
-                // anything failed, rather than silently reporting success
-                // while some records never actually made it to CloudKit.
+                // the whole chunk, so successes and failures are collected
+                // per record rather than per chunk.
                 for (recordID, saveResult) in result.saveResults {
-                    if case .failure(let error) = saveResult {
+                    switch saveResult {
+                    case .success:
+                        confirmedIDs.insert(recordID.recordName)
+                    case .failure(let error):
                         if firstError == nil { firstError = error }
-                        if let asset = assetsByRecordID[recordID] {
-                            failedAssets.append(asset)
-                        }
                     }
                 }
             } catch {
+                // Whole chunk failed outright (e.g. network) — nothing is
+                // confirmed, so its write-ahead entries simply stay queued.
                 if firstError == nil { firstError = error }
-                let chunkRecordIDs = Set(chunk.map(\.recordID))
-                failedAssets.append(contentsOf: assetsByRecordID.compactMap { key, value in
-                    chunkRecordIDs.contains(key) ? value : nil
-                })
             }
-        }
 
-        for asset in failedAssets {
-            ledger.append(PendingMutation(kind: .upsert, assetID: asset.id, assetPayload: asset))
+            // STEP 2: retire only what CloudKit confirmed. Anything still
+            // queued after this loop is genuinely unfinished.
+            ledger.removeMutations(forAssetIDs: confirmedIDs)
         }
 
         if let firstError { throw firstError }

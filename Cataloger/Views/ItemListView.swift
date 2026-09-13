@@ -22,6 +22,19 @@ struct ItemListView: View {
     /// that the list isn't showing everything.
     private var isFilterActive: Bool { (store.activeSidebarFilter ?? .all) != .all }
 
+    /// Select All operates on `visibleAssets`, not `assets` — with a filter
+    /// or search active, "all" means what's on screen. Selecting hidden
+    /// items the user can't see and then batch-deleting them would be a
+    /// nasty surprise.
+    private var visibleIDs: Set<String> {
+        Set(store.visibleAssets.map(\.id))
+    }
+
+    private var areAllVisibleSelected: Bool {
+        let visible = visibleIDs
+        return !visible.isEmpty && visible.isSubset(of: store.selectedAssetIDs)
+    }
+
     /// When non-nil, tapping a row calls this instead of pushing onto this
     /// view's own NavigationStack. WidescreenContainer passes a closure that
     /// updates `selectedAssetIDs` (driving the separate detail column);
@@ -118,8 +131,17 @@ struct ItemListView: View {
                 }
             }
             .navigationTitle("Inventory")
+            // Inline rather than the default large title: the large style
+            // reserves a ~52pt block above the list purely for text, and
+            // this screen already identifies itself via the search bar
+            // directly below. Inline keeps the toolbar (filter, Done,
+            // Select All) while reclaiming that space for rows.
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                if needsFilterButton {
+                // Filter button steps aside in select mode — otherwise it
+                // crowds the Done button on the same leading edge, and
+                // changing the filter mid-selection is confusing anyway.
+                if needsFilterButton && !isSelectMode {
                     ToolbarItem(placement: .navigationBarLeading) {
                         Button {
                             isFilterSheetPresented = true
@@ -138,6 +160,12 @@ struct ItemListView: View {
                             store.selectedAssetIDs.removeAll()
                         }
                     }
+                    ToolbarItem(placement: .primaryAction) {
+                        Button(areAllVisibleSelected ? "Deselect All" : "Select All") {
+                            toggleSelectAll()
+                        }
+                        .disabled(store.visibleAssets.isEmpty)
+                    }
                 }
             }
             .sheet(isPresented: $isFilterSheetPresented) {
@@ -153,6 +181,15 @@ struct ItemListView: View {
         .background(
             Button("") { isSearchFocused = true }
                 .keyboardShortcut("f", modifiers: .command)
+                .hidden()
+        )
+        // Cmd+A selects everything visible, but ONLY in select mode and only
+        // when the search field isn't focused — otherwise it would hijack
+        // the text field's own select-all while typing.
+        .background(
+            Button("") { toggleSelectAll() }
+                .keyboardShortcut("a", modifiers: .command)
+                .disabled(!isSelectMode || isSearchFocused)
                 .hidden()
         )
         .onKeyPress(.escape) {
@@ -197,6 +234,19 @@ struct ItemListView: View {
             guard let index = selectedRowIndex, store.visibleAssets.indices.contains(index) else { return .ignored }
             selectRow(store.visibleAssets[index].id)
             return .handled
+        }
+    }
+
+    private func toggleSelectAll() {
+        let visible = visibleIDs
+        if visible.isSubset(of: store.selectedAssetIDs) {
+            // Subtract rather than removeAll: anything selected that isn't
+            // currently visible (selected before a filter was applied) stays
+            // selected, so deselecting what's on screen can't silently drop
+            // it from the batch.
+            store.selectedAssetIDs.subtract(visible)
+        } else {
+            store.selectedAssetIDs.formUnion(visible)
         }
     }
 

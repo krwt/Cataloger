@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import CloudKit
 
 /// The single source of truth for all active views, per the architecture
 /// blueprint. All filtering, search, and tag auto-complete happen entirely
@@ -275,6 +276,11 @@ final class AppStore {
             // Assigned only on success, so a failed fetch silently leaves
             // the cached list in place — that's what makes offline launch work.
             assets = fresh
+            // This full fetch gives no change token, and any token we held
+            // predates it. Clearing means the next incremental fetch starts
+            // from scratch (returns everything once) rather than diffing
+            // against a point in time this snapshot has already passed.
+            await cloudKit.resetChangeToken()
             applyPendingLocally(pending)
             bumpRevision()
         } catch {
@@ -300,6 +306,7 @@ final class AppStore {
             if !pending.isEmpty && stillFailedCount < pending.count {
                 if let fresh = try? await cloudKit.fetchAllAssets() {
                     assets = fresh
+                    await cloudKit.resetChangeToken()
                     applyPendingLocally(await cloudKit.pendingMutations())
                     bumpRevision()
                 }
@@ -351,6 +358,7 @@ final class AppStore {
         defer { isRefreshing = false }
         do {
             assets = try await cloudKit.fetchAllAssets()
+            await cloudKit.resetChangeToken()
             // Same reasoning as bootstrap: the server doesn't know about
             // still-queued work yet, so a bare fetch would make offline
             // additions disappear from the list mid-session.
@@ -363,28 +371,62 @@ final class AppStore {
 
     /// Called when the app returns to the foreground.
     ///
-    /// Nothing currently consumes the CKRecordZoneSubscription's silent
-    /// pushes (that needs an AppDelegate + the remote-notification
-    /// background mode), so without this a second device's additions only
-    /// appear on cold launch or a manual pull-to-refresh. This covers the
-    /// common case — edit on one device, pick up the other.
-    ///
-    /// Deliberately quieter than `refresh()`: a failure here is silent,
-    /// since the user didn't ask for this and already has usable data on
-    /// screen. It also retries the offline queue, which is often exactly
-    /// what changed while the app was backgrounded.
+    /// Covers the common multi-device case — edit on one device, pick up the
+    /// other — and retries the offline queue, since connectivity often
+    /// changed while backgrounded. Deliberately quiet: failures are silent
+    /// because the user didn't ask for this and already has usable data.
     func refreshOnForeground() async {
         isRefreshing = true
         defer { isRefreshing = false }
 
         _ = await cloudKit.flushOfflineLedger()
+        await applyRemoteChanges()
+        await refreshPendingSyncCount()
+    }
 
-        if let fresh = try? await cloudKit.fetchAllAssets() {
-            assets = fresh
+    /// Called from a CloudKit silent push (see `AppDelegate`).
+    ///
+    /// Kept separate from `refreshOnForeground` because a background wake has
+    /// a hard execution budget: this does the incremental fetch only, with no
+    /// ledger flush, so it finishes fast and doesn't risk being killed
+    /// mid-write. Pushing queued mutations can wait for the next foreground.
+    func handlePushNotification() async {
+        await applyRemoteChanges()
+    }
+
+    /// Applies an incremental (change-token) fetch to the in-memory list.
+    /// Falls back to a full fetch if the token has expired.
+    private func applyRemoteChanges() async {
+        do {
+            let changes = try await cloudKit.fetchChanges()
+            guard !changes.changed.isEmpty || !changes.deletedIDs.isEmpty else { return }
+
+            var byID = Dictionary(assets.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+            for asset in changes.changed {
+                byID[asset.id] = asset
+            }
+            for id in changes.deletedIDs {
+                byID.removeValue(forKey: id)
+                selectedAssetIDs.remove(id)
+            }
+            assets = Array(byID.values)
+
+            // Locally-queued work still isn't on the server, so re-apply it
+            // on top or it would vanish from the list.
             applyPendingLocally(await cloudKit.pendingMutations())
             bumpRevision()
+        } catch let error as CKError where error.code == .changeTokenExpired {
+            // Token too old to diff against — fall back to a full authoritative
+            // fetch. `fetchChanges` already discarded the stale token.
+            if let fresh = try? await cloudKit.fetchAllAssets() {
+                assets = fresh
+                await cloudKit.resetChangeToken()
+                applyPendingLocally(await cloudKit.pendingMutations())
+                bumpRevision()
+            }
+        } catch {
+            // Silent: this path is never user-initiated.
         }
-        await refreshPendingSyncCount()
     }
 
     // MARK: - Mutations
@@ -478,7 +520,9 @@ final class AppStore {
         bumpRevision()
 
         do {
-            try await cloudKit.batchUpsert(toSave)
+            try await BackgroundActivity.run("Import to iCloud") {
+                try await cloudKit.batchUpsert(toSave)
+            }
         } catch {
             lastError = "Items saved locally but some failed to sync: \(error.localizedDescription)"
         }
@@ -666,9 +710,12 @@ final class AppStore {
         // Clear it outright instead.
         cacheWriteTask?.cancel()
         AssetCache.clear()
+        await cloudKit.resetChangeToken()
 
         do {
-            try await cloudKit.batchDelete(assetIDs: allIDs)
+            try await BackgroundActivity.run("Delete all from iCloud") {
+                try await cloudKit.batchDelete(assetIDs: allIDs)
+            }
         } catch {
             lastError = "Items deleted locally but some failed to delete from iCloud: \(error.localizedDescription)"
         }
