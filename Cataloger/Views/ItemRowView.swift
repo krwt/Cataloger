@@ -75,6 +75,10 @@ struct ThumbnailView: View {
     /// where showing the real image is expected.
     var allowRemoteLoad: Bool = true
     @State private var localImage: UIImage?
+    /// Distinguishes "haven't looked on disk yet" from "looked, found
+    /// nothing" — without it the placeholder can't tell whether to keep
+    /// waiting or show the final fallback icon.
+    @State private var didAttemptLocalLoad = false
 
     var body: some View {
         Group {
@@ -96,12 +100,32 @@ struct ThumbnailView: View {
             }
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        // Loads the local HEIC copy off the main thread. This used to be a
+        // synchronous `Data(contentsOf:)` + `UIImage(data:)` call directly
+        // inside `fallbackOrPlaceholder` — i.e. blocking disk I/O and an
+        // image decode running in a view body, once per row, on every
+        // render pass. Combined with the (previously uncached) iCloud
+        // container lookup behind `ImageStore.localURL`, that's what made
+        // typing stall and the keyboard freeze.
+        .task(id: asset.id) {
+            if let cached = ImageStore.cachedImage(assetID: asset.id) {
+                localImage = cached
+                didAttemptLocalLoad = true
+                return
+            }
+            localImage = await ImageStore.loadImage(assetID: asset.id)
+            didAttemptLocalLoad = true
+        }
     }
 
     @ViewBuilder
     private var fallbackOrPlaceholder: some View {
-        if let data = ImageStore.loadLocalImage(assetID: asset.id), let uiImage = UIImage(data: data) {
-            Image(uiImage: uiImage).resizable().aspectRatio(contentMode: .fill)
+        if let localImage {
+            Image(uiImage: localImage).resizable().aspectRatio(contentMode: .fill)
+        } else if !didAttemptLocalLoad {
+            // Still reading from disk — show neutral empty space rather
+            // than flashing the "no image" icon and then replacing it.
+            Color.clear
         } else if let urlString = asset.imgurURLString, !urlString.isEmpty {
             // The item does have an image — it just isn't showing right now
             // (network issue, or preload-off skipped fetching it). Distinct

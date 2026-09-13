@@ -2,8 +2,17 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct MasterSearchBar: View {
+    @Binding var isAddSheetPresented: Bool
     @Environment(AppStore.self) private var store
     @FocusState.Binding var isSearchFocused: Bool
+    /// Local, unobserved draft the TextField binds to. Typing into this
+    /// costs nothing beyond a plain `@State` update — it doesn't touch
+    /// `store.searchText`, which is what actually drives `visibleAssets`
+    /// filtering/sorting and a full row re-render of `ItemListView` on
+    /// every `@Observable` mutation. `store.searchText` is only updated
+    /// ~150ms after the user pauses typing, via `searchDebounceTask` below.
+    @State private var searchDraft = ""
+    @State private var searchDebounceTask: Task<Void, Never>?
     @State private var showScanner = false
     @State private var showContextMenu = false
     @State private var showAddSheet = false
@@ -45,10 +54,20 @@ struct MasterSearchBar: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                 HStack {
-                    TextField("Search Items, SKUs, or Tags...", text: $store.searchText)
+                    TextField("Search Items, SKUs, or Tags...", text: $searchDraft)
                         .focused($isSearchFocused)
                         .textFieldStyle(.plain)
+                        .onChange(of: searchDraft) { _, newValue in
+                            searchDebounceTask?.cancel()
+                            searchDebounceTask = Task {
+                                try? await Task.sleep(nanoseconds: 150_000_000)
+                                guard !Task.isCancelled else { return }
+                                store.searchText = newValue
+                            }
+                        }
                     Button {
+                        searchDebounceTask?.cancel()
+                        searchDraft = ""
                         store.searchText = ""
                     } label: {
                         Image(systemName: "xmark.circle")
@@ -72,9 +91,12 @@ struct MasterSearchBar: View {
             }
         }
         .padding(.horizontal)
+        .onAppear { searchDraft = store.searchText }
         .sheet(isPresented: $showScanner) {
             QRScannerView(
                 onCode: { code in
+                    searchDebounceTask?.cancel()
+                    searchDraft = code
                     store.searchText = code
                     showScanner = false
                 },

@@ -9,6 +9,7 @@ import SwiftUI
 /// what you see here always matches what actually gets persisted.
 struct TagEditorSection: View {
     @Environment(AppStore.self) private var store
+    @FocusState private var isDraftFocused: Bool
     @Binding var tags: [String]
     @State private var draftText = ""
     @State private var highlightedIndex: Int?
@@ -39,25 +40,37 @@ struct TagEditorSection: View {
 
             HStack {
                 TextField("Add tag", text: $draftText)
+                    .focused($isDraftFocused)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .onSubmit { commitDraft() }
-                    // Up/Down cycle through suggestion chips — Left/Right
-                    // are deliberately left alone so they still move the
-                    // text cursor normally while typing.
-                    .onKeyPress(.downArrow) {
-                        moveHighlight(by: 1)
-                        return .handled
-                    }
-                    .onKeyPress(.upArrow) {
-                        moveHighlight(by: -1)
-                        return .handled
-                    }
                 Button("Add") { commitDraft() }
                     .disabled(draftText.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .onChange(of: draftText) { _, _ in
                 highlightedIndex = nil
+            }
+            // Suggestion navigation is Cmd+K (up) / Cmd+J (down).
+            //
+            // Bare arrows are consumed by the focused TextField as first
+            // responder for caret movement. Cmd+Up / Cmd+Down don't escape
+            // that either — they're UIKit's own built-in text-editing key
+            // commands for "move to start/end of document", so the text
+            // field eats them too. Cmd+K / Cmd+J have no text-editing
+            // meaning, so they actually reach this handler.
+            //
+            // `.disabled(suggestions.isEmpty)` keeps these inert whenever
+            // no chips are showing, so the shortcut never fires unexpectedly
+            // elsewhere in the form.
+            .background {
+                VStack {
+                    Button("") { moveHighlight(by: -1) }
+                        .keyboardShortcut("k", modifiers: .command)
+                    Button("") { moveHighlight(by: 1) }
+                        .keyboardShortcut("j", modifiers: .command)
+                }
+                .opacity(0)
+                .disabled(suggestions.isEmpty)
             }
 
             if !suggestions.isEmpty {
@@ -82,6 +95,10 @@ struct TagEditorSection: View {
                         }
                     }
                 }
+
+                Text("⌘K / ⌘J to highlight, Return to add")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
     }

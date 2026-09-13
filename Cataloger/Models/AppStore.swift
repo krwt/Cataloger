@@ -9,6 +9,13 @@ final class AppStore {
 
     // MARK: - Core state
     private(set) var assets: [Asset] = []
+    /// Bumped by `bumpRevision()` every time `assets` is mutated. Lets
+    /// `visibleAssets` cheaply detect "have the assets actually changed
+    /// since I last filtered/sorted them?" without deep-comparing the
+    /// array itself. Reading this property inside `visibleAssets` is what
+    /// keeps it participating in `@Observable`'s tracking, so a change
+    /// still correctly triggers a re-render.
+    private var assetsRevision: Int = 0
     var searchText: String = ""
     var selectedAssetIDs: Set<String> = []
     var isLoading = false
@@ -57,9 +64,18 @@ final class AppStore {
     /// large collection. Turning this on restores the old always-load
     /// behavior. Detail view and the full-screen preview always load the
     /// real image regardless of this setting — it only governs list rows.
-    var preloadAllImages: Bool {
-        get { UserDefaults.standard.bool(forKey: "preloadAllImages") }
-        set { UserDefaults.standard.set(newValue, forKey: "preloadAllImages") }
+    /// Backed by a stored property that's read from `UserDefaults` once at
+    /// init and written through on change. Previously both the getter and
+    /// setter hit `UserDefaults` directly, which meant every row in the
+    /// list performed a `UserDefaults` lookup on every render pass — and,
+    /// because a bare computed property over `UserDefaults` isn't part of
+    /// `@Observable`'s tracking, toggling it didn't reliably refresh the
+    /// list either. This fixes both.
+    var preloadAllImages: Bool = UserDefaults.standard.bool(forKey: "preloadAllImages") {
+        didSet {
+            guard oldValue != preloadAllImages else { return }
+            UserDefaults.standard.set(preloadAllImages, forKey: "preloadAllImages")
+        }
     }
 
     // Imgur OAuth state, passed through from ImgurAuthManager for view binding.
@@ -82,11 +98,33 @@ final class AppStore {
 
     // MARK: - Derived / computed
 
+    /// Memoizes the last computed `visibleAssets` result, keyed on the
+    /// inputs that actually affect it. `@ObservationIgnored` because this
+    /// is a private implementation detail, not user-facing state — it
+    /// should never itself be treated as an observed dependency.
+    @ObservationIgnored
+    private var visibleAssetsCache: (revision: Int, searchText: String, filter: SidebarFilter?, result: [Asset])?
+
     /// Search + sidebar filtering, entirely in-memory. Sorted newest-first
     /// by `createdAt` ("latest addition on top") — deliberately not
     /// `modifiedAt`, since that would reorder the whole list every time
     /// someone just edits a description.
+    ///
+    /// Previously this re-filtered and re-sorted the *entire* `assets`
+    /// array from scratch on every single access — and since it's a plain
+    /// computed property read by SwiftUI's diffing, that could happen
+    /// several times per render pass, on every keystroke in search. Now
+    /// it's cached: if `assets` hasn't changed (`assetsRevision` is the
+    /// same) and the search/filter inputs are the same, the previous
+    /// result is returned directly instead of recomputing.
     var visibleAssets: [Asset] {
+        if let cache = visibleAssetsCache,
+           cache.revision == assetsRevision,
+           cache.searchText == searchText,
+           cache.filter == activeSidebarFilter {
+            return cache.result
+        }
+
         var result = assets
 
         switch activeSidebarFilter ?? .all {
@@ -110,7 +148,9 @@ final class AppStore {
             }
         }
 
-        return result.sorted { $0.createdAt > $1.createdAt }
+        let sorted = result.sorted { $0.createdAt > $1.createdAt }
+        visibleAssetsCache = (assetsRevision, searchText, activeSidebarFilter, sorted)
+        return sorted
     }
 
     /// True when the active search yields zero matches - drives the
@@ -163,12 +203,24 @@ final class AppStore {
 
     // MARK: - Lifecycle
 
+    /// Invalidates `visibleAssetsCache` by advancing the revision counter.
+    /// Must be called after every mutation of `assets` — assignment,
+    /// append, in-place element replacement, or removal.
+    private func bumpRevision() {
+        assetsRevision &+= 1
+    }
+
     func bootstrap() async {
         isLoading = true
         defer { isLoading = false }
+        // Resolves the iCloud ubiquity container once, off the main thread,
+        // before any view tries to render a thumbnail. Otherwise the first
+        // view that needs it pays that blocking lookup mid-render.
+        await ImageStore.prepare()
         do {
             let stillFailedCount = try await cloudKit.bootstrap()
             assets = try await cloudKit.fetchAllAssets()
+            bumpRevision()
             await refreshPendingSyncCount()
             if stillFailedCount > 0 {
                 lastError = "\(stillFailedCount) item(s) still couldn't sync to iCloud after retrying. They're saved on this device and will keep retrying — check your internet connection."
@@ -188,6 +240,7 @@ final class AppStore {
     func refresh() async {
         do {
             assets = try await cloudKit.fetchAllAssets()
+            bumpRevision()
         } catch {
             lastError = "Refresh failed: \(error.localizedDescription)"
         }
@@ -221,11 +274,13 @@ final class AppStore {
         } else {
             assets.append(toSave)
         }
+        bumpRevision()
 
         do {
             let resolved = try await cloudKit.upsert(toSave)
             if let index = assets.firstIndex(where: { $0.id == resolved.id }) {
                 assets[index] = resolved // may reflect remote last-write-wins result
+                bumpRevision()
             }
             await refreshPendingSyncCount()
             return resolved
@@ -266,13 +321,20 @@ final class AppStore {
         syncStatusMessage = "Syncing \(toSave.count) item(s) to iCloud…"
         defer { isSyncing = false }
 
+        var indexByID: [String: Int] = [:]
+        indexByID.reserveCapacity(assets.count)
+        for (index, existing) in assets.enumerated() {
+            indexByID[existing.id] = index
+        }
         for asset in toSave {
-            if let index = assets.firstIndex(where: { $0.id == asset.id }) {
+            if let index = indexByID[asset.id] {
                 assets[index] = asset
             } else {
                 assets.append(asset)
+                indexByID[asset.id] = assets.count - 1
             }
         }
+        bumpRevision()
 
         do {
             try await cloudKit.batchUpsert(toSave)
@@ -284,6 +346,7 @@ final class AppStore {
 
     func delete(assetID: String) async {
         assets.removeAll { $0.id == assetID }
+        bumpRevision()
         selectedAssetIDs.remove(assetID)
         do {
             try await cloudKit.delete(assetID: assetID)
@@ -302,11 +365,62 @@ final class AppStore {
 
     // MARK: - Batch operations (all require confirmation except Batch Checkout)
 
-    func batchMove(ids: Set<String>, toContainer container: String) async {
+    /// Applies `mutate` to every targeted asset and commits all of them in
+    /// a single batched CloudKit write.
+    ///
+    /// The three batch operations below used to each loop `ids` and call
+    /// `save()` per item. That was O(N·K) locally — `save()`'s own
+    /// `firstIndex(where:)` rescans the *entire* `assets` array for every
+    /// one of the K selected items — and, separately, K fully sequential
+    /// `await`ed network round-trips to CloudKit, one at a time. Neither
+    /// cost is CloudKit-storage-related; both come from the loop shape
+    /// itself. This builds an id -> index map once (O(N)), applies all K
+    /// mutations against it (O(K)), and syncs with one `batchUpsert` call
+    /// — the same batching approach `bulkSave` already uses for legacy/CSV
+    /// import.
+    private func applyBatchUpdate(
+        ids: Set<String>,
+        statusVerb: String,
+        mutate: (inout Asset) -> Void
+    ) async {
+        guard !ids.isEmpty else { return }
+
+        var indexByID: [String: Int] = [:]
+        indexByID.reserveCapacity(assets.count)
+        for (index, asset) in assets.enumerated() {
+            indexByID[asset.id] = index
+        }
+
+        var updated: [Asset] = []
+        updated.reserveCapacity(ids.count)
+
         for id in ids {
-            guard var asset = assets.first(where: { $0.id == id }) else { continue }
+            guard let index = indexByID[id] else { continue }
+            var asset = assets[index]
+            mutate(&asset)
+            let toSave = sanitized(asset)
+            assets[index] = toSave
+            updated.append(toSave)
+        }
+
+        guard !updated.isEmpty else { return }
+        bumpRevision()
+
+        isSyncing = true
+        syncStatusMessage = "\(statusVerb) \(updated.count) item(s)…"
+        defer { isSyncing = false }
+
+        do {
+            try await cloudKit.batchUpsert(updated)
+        } catch {
+            lastError = "Changes saved locally but some failed to sync: \(error.localizedDescription)"
+        }
+        await refreshPendingSyncCount()
+    }
+
+    func batchMove(ids: Set<String>, toContainer container: String) async {
+        await applyBatchUpdate(ids: ids, statusVerb: "Moving") { asset in
             asset.containerLocation = container
-            await save(asset)
         }
         selectedAssetIDs.removeAll()
     }
@@ -316,22 +430,18 @@ final class AppStore {
         let targetState = ids.contains { id in
             !(assets.first(where: { $0.id == id })?.isCheckedOut ?? true)
         }
-        for id in ids {
-            guard var asset = assets.first(where: { $0.id == id }) else { continue }
+        await applyBatchUpdate(ids: ids, statusVerb: "Updating checkout for") { asset in
             asset.isCheckedOut = targetState
-            await save(asset)
         }
     }
 
     func batchAddTag(ids: Set<String>, tag: String) async {
         let cleanTag = Asset.normalizeTag(tag)
         guard !cleanTag.isEmpty else { return }
-        for id in ids {
-            guard var asset = assets.first(where: { $0.id == id }) else { continue }
+        await applyBatchUpdate(ids: ids, statusVerb: "Tagging") { asset in
             if !asset.tags.contains(where: { Asset.normalizeTag($0) == cleanTag }) {
                 asset.tags.append(cleanTag)
             }
-            await save(asset)
         }
         selectedAssetIDs.removeAll()
     }
@@ -407,6 +517,7 @@ final class AppStore {
         defer { isSyncing = false }
 
         assets.removeAll()
+        bumpRevision()
         selectedAssetIDs.removeAll()
 
         do {

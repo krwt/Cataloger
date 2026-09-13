@@ -6,6 +6,7 @@ struct ItemListView: View {
     @State private var selectedRowIndex: Int?
     @FocusState private var isSearchFocused: Bool
     @State private var isSelectMode = false
+    @State private var isAddSheetPresented = false
 
     /// When non-nil, tapping a row calls this instead of pushing onto this
     /// view's own NavigationStack. WidescreenContainer passes a closure that
@@ -22,8 +23,9 @@ struct ItemListView: View {
 
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
-                MasterSearchBar(isSearchFocused: $isSearchFocused)
-                    .padding(.vertical, 8)
+                MasterSearchBar(
+                    isAddSheetPresented: $isAddSheetPresented, isSearchFocused: $isSearchFocused
+                ).padding(.vertical, 8)
 
                 List(selection: $store.selectedAssetIDs) {
                     ForEach(Array(store.visibleAssets.enumerated()), id: \.element.id) { index, asset in
@@ -104,15 +106,26 @@ struct ItemListView: View {
             }
             return .ignored
         }
+        // Arrow keys move the row selection only when the list is actually
+        // the active context. These used to return `.handled`
+        // unconditionally, which swallowed arrows meant for other views —
+        // and because a presented sheet shares the same focus ring as its
+        // presenter here (Tab from the Add sheet walks right into this
+        // view's search field), "some other view" includes views inside
+        // the Add sheet. Returning `.ignored` lets the event fall through
+        // to whoever should actually get it.
         .onKeyPress(.upArrow) {
+            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
             moveSelection(-1)
             return .handled
         }
         .onKeyPress(.downArrow) {
+            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
             moveSelection(1)
             return .handled
         }
         .onKeyPress(.return) {
+            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
             guard let index = selectedRowIndex, store.visibleAssets.indices.contains(index) else { return .ignored }
             selectRow(store.visibleAssets[index].id)
             return .handled
