@@ -38,14 +38,21 @@ struct MasterSearchBar: View {
 
             HStack {
                 Image(systemName: "magnifyingglass")
-                TextField("Search Items, SKUs, or Tags...", text: $store.searchText)
-                    .focused($isSearchFocused)
-                    .textFieldStyle(.plain)
+                HStack{
+                    TextField("Search Items, SKUs, or Tags...", text: $store.searchText)
+                        .focused($isSearchFocused)
+                        .textFieldStyle(.plain)
+                    Button {
+                        store.searchText = ""
+                    } label:{
+                        Image(systemName: "xmark.circle")
+                    }
+                }.padding()
                 Spacer()
                 Button {
                     showScanner = true
                 } label: {
-                    Image(systemName: "camera")
+                    Image(systemName: "qrcode.viewfinder")
                 }
             }
             .padding(8)
