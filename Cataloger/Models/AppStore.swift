@@ -19,6 +19,11 @@ final class AppStore {
     var searchText: String = ""
     var selectedAssetIDs: Set<String> = []
     var isLoading = false
+    /// Distinct from `isLoading`: rows are already on screen (from the disk
+    /// cache) and a background refresh is running. `isLoading` means there's
+    /// genuinely nothing to show yet. Conflating them would put a blocking
+    /// spinner over perfectly good data on every launch and foreground.
+    var isRefreshing = false
     var lastError: String?
     /// Set during any bulk CloudKit operation (delete all, legacy import,
     /// CSV restore) so the UI can show a visible "don't close the app yet"
@@ -206,8 +211,29 @@ final class AppStore {
     /// Invalidates `visibleAssetsCache` by advancing the revision counter.
     /// Must be called after every mutation of `assets` — assignment,
     /// append, in-place element replacement, or removal.
+    ///
+    /// Also schedules the disk cache write. Hanging it off this one call
+    /// rather than off each individual mutation site means the cache
+    /// physically can't drift out of sync with `assets`: anything that
+    /// forgets to bump is already a visible-list bug.
     private func bumpRevision() {
         assetsRevision &+= 1
+        scheduleCacheWrite()
+    }
+
+    /// Coalesces cache writes so a bulk import of several hundred items
+    /// writes once at the end rather than once per item.
+    @ObservationIgnored
+    private var cacheWriteTask: Task<Void, Never>?
+
+    private func scheduleCacheWrite() {
+        cacheWriteTask?.cancel()
+        let snapshot = assets
+        cacheWriteTask = Task { [snapshot] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            await AssetCache.save(snapshot)
+        }
     }
 
     func bootstrap() async {
@@ -217,37 +243,51 @@ final class AppStore {
         // just delayed the list for no reason.
         Task { await ImageStore.prepare() }
 
-        isLoading = true
-
         // Read the offline queue BEFORE the flush drains it — these payloads
         // are the only local record of work done while offline.
         let pending = await cloudKit.pendingMutations()
 
-        do {
-            // Fetched FIRST, before zone/subscription setup and the ledger
-            // flush. Those are two-plus network round-trips that only
-            // matter for writes, and putting them ahead of the fetch meant
-            // the list couldn't appear until they finished. On a brand-new
-            // container the zone doesn't exist yet and this throws
-            // `unknownItem` — which `fetchAllAssets` already catches and
-            // reports as empty, so running it first is safe.
-            assets = try await cloudKit.fetchAllAssets()
-        } catch {
-            lastError = "Could not connect to iCloud: \(error.localizedDescription)"
+        // STEP 1: disk cache — rows render here, before any network call.
+        let cached = AssetCache.load()
+        if !cached.isEmpty {
+            assets = cached
+            applyPendingLocally(pending)
+            assetsRevision &+= 1   // invalidate the filter cache WITHOUT
+                                   // rescheduling a write of what we just read
+        } else {
+            // Nothing cached (first launch, or cleared) — this is a genuine
+            // wait on the network, so show the loading state.
+            isLoading = true
         }
 
-        // The fetch returns SERVER state, which by definition predates
-        // anything still sitting in the offline queue. Without this merge,
-        // items added offline stay invisible until the flush finishes and
-        // the user manually pulls to refresh. Applying the queued payloads
-        // locally shows that work immediately — and still works when the
-        // fetch itself failed, so a fully-offline relaunch shows offline
-        // additions rather than nothing.
-        applyPendingLocally(pending)
-        bumpRevision()
+        // STEP 2: refresh from CloudKit. `isRefreshing` rather than
+        // `isLoading` when the cache already populated the list: the rows on
+        // screen are real, they're just possibly stale, so a blocking
+        // spinner over them would be a lie.
+        isRefreshing = true
+        do {
+            // On a brand-new container the zone doesn't exist yet and this
+            // throws `unknownItem` — which `fetchAllAssets` already catches
+            // and reports as empty, so running it before setup is safe.
+            let fresh = try await cloudKit.fetchAllAssets()
+            // Replace rather than merge: the server is authoritative, so an
+            // item deleted on another device correctly disappears here.
+            // Assigned only on success, so a failed fetch silently leaves
+            // the cached list in place — that's what makes offline launch work.
+            assets = fresh
+            applyPendingLocally(pending)
+            bumpRevision()
+        } catch {
+            if cached.isEmpty {
+                lastError = "Could not connect to iCloud: \(error.localizedDescription)"
+            }
+            // With a populated cache this is a soft failure — the user has
+            // usable data on screen, so don't interrupt them with an alert.
+        }
         isLoading = false
+        isRefreshing = false
 
-        // Zone + subscription setup and the offline-ledger replay happen
+        // STEP 3: zone + subscription setup and the offline-ledger replay,
         // after the list is already on screen.
         do {
             let stillFailedCount = try await cloudKit.bootstrap()
@@ -257,7 +297,6 @@ final class AppStore {
             // If anything actually flushed, re-read the server so local
             // state matches what CloudKit resolved (last-write-wins may
             // have picked a different winner than the local payload).
-            // Whatever is *still* queued gets re-merged on top.
             if !pending.isEmpty && stillFailedCount < pending.count {
                 if let fresh = try? await cloudKit.fetchAllAssets() {
                     assets = fresh
@@ -266,8 +305,7 @@ final class AppStore {
                 }
             }
         } catch {
-            // Don't clobber a fetch error that's already being shown.
-            if lastError == nil {
+            if lastError == nil && cached.isEmpty {
                 lastError = "Could not connect to iCloud: \(error.localizedDescription)"
             }
         }
@@ -309,6 +347,8 @@ final class AppStore {
     }
 
     func refresh() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
         do {
             assets = try await cloudKit.fetchAllAssets()
             // Same reasoning as bootstrap: the server doesn't know about
@@ -319,6 +359,32 @@ final class AppStore {
         } catch {
             lastError = "Refresh failed: \(error.localizedDescription)"
         }
+    }
+
+    /// Called when the app returns to the foreground.
+    ///
+    /// Nothing currently consumes the CKRecordZoneSubscription's silent
+    /// pushes (that needs an AppDelegate + the remote-notification
+    /// background mode), so without this a second device's additions only
+    /// appear on cold launch or a manual pull-to-refresh. This covers the
+    /// common case — edit on one device, pick up the other.
+    ///
+    /// Deliberately quieter than `refresh()`: a failure here is silent,
+    /// since the user didn't ask for this and already has usable data on
+    /// screen. It also retries the offline queue, which is often exactly
+    /// what changed while the app was backgrounded.
+    func refreshOnForeground() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+
+        _ = await cloudKit.flushOfflineLedger()
+
+        if let fresh = try? await cloudKit.fetchAllAssets() {
+            assets = fresh
+            applyPendingLocally(await cloudKit.pendingMutations())
+            bumpRevision()
+        }
+        await refreshPendingSyncCount()
     }
 
     // MARK: - Mutations
@@ -594,6 +660,12 @@ final class AppStore {
         assets.removeAll()
         bumpRevision()
         selectedAssetIDs.removeAll()
+        // `bumpRevision` schedules a write of the now-empty array, but that's
+        // debounced — if the app is killed inside that window the stale cache
+        // would survive and resurrect every "deleted" item on next launch.
+        // Clear it outright instead.
+        cacheWriteTask?.cancel()
+        AssetCache.clear()
 
         do {
             try await cloudKit.batchDelete(assetIDs: allIDs)

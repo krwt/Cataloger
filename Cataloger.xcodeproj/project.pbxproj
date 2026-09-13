@@ -51,6 +51,8 @@
 		94BF01BC24C1573D00319C89 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */; };
 		94BF01CA24C1573D00319C89 /* CatalogerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01C924C1573D00319C89 /* CatalogerTests.swift */; };
 		94BF01D524C1573D00319C89 /* CatalogerUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01D424C1573D00319C89 /* CatalogerUITests.swift */; };
+		94F718013056BD1100CE51C6 /* AssetCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F718003056BD1100CE51C6 /* AssetCache.swift */; };
+		94F718023056BD1100CE51C6 /* AssetCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F718003056BD1100CE51C6 /* AssetCache.swift */; };
 		94FD8D3430561244008AD340 /* Array+Chunked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3330561244008AD340 /* Array+Chunked.swift */; };
 		94FD8D3530561244008AD340 /* Array+Chunked.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D3330561244008AD340 /* Array+Chunked.swift */; };
 		94FD8D373056126E008AD340 /* CSVParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FD8D363056126E008AD340 /* CSVParser.swift */; };
@@ -113,6 +115,7 @@
 		94BF01D424C1573D00319C89 /* CatalogerUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CatalogerUITests.swift; sourceTree = "<group>"; };
 		94BF01D624C1573D00319C89 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		94BF01E224C1575600319C89 /* Cataloger.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Cataloger.entitlements; sourceTree = "<group>"; };
+		94F718003056BD1100CE51C6 /* AssetCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AssetCache.swift; sourceTree = "<group>"; };
 		94FD8D3330561244008AD340 /* Array+Chunked.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Array+Chunked.swift"; sourceTree = "<group>"; };
 		94FD8D363056126E008AD340 /* CSVParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVParser.swift; sourceTree = "<group>"; };
 		94FD8D39305612A3008AD340 /* CSVBackupManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CSVBackupManager.swift; sourceTree = "<group>"; };
@@ -167,6 +170,7 @@
 			isa = PBXGroup;
 			children = (
 				94FD8D4230562273008AD340 /* LabelGenerator.swift */,
+				94F718003056BD1100CE51C6 /* AssetCache.swift */,
 				94FD8D3330561244008AD340 /* Array+Chunked.swift */,
 				946814013048ECCE004A38DA /* CloudKitManager.swift */,
 				946814023048ECCE004A38DA /* CSVExportManager.swift */,
@@ -396,6 +400,7 @@
 				946814143048ECCE004A38DA /* CSVExportManager.swift in Sources */,
 				946814153048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814163048ECCE004A38DA /* CatalogerApp.swift in Sources */,
+				94F718023056BD1100CE51C6 /* AssetCache.swift in Sources */,
 				946814173048ECCE004A38DA /* ImgurUploadManager.swift in Sources */,
 				94FD8D4130561315008AD340 /* TagEditorSection.swift in Sources */,
 				946814183048ECCE004A38DA /* MasterSearchBar.swift in Sources */,
@@ -454,6 +459,7 @@
 				946814323048ECCE004A38DA /* QRScannerView.swift in Sources */,
 				946814333048ECCE004A38DA /* BatchActionBar.swift in Sources */,
 				94FD8D3530561244008AD340 /* Array+Chunked.swift in Sources */,
+				94F718013056BD1100CE51C6 /* AssetCache.swift in Sources */,
 				94FD8D373056126E008AD340 /* CSVParser.swift in Sources */,
 				946814343048ECCE004A38DA /* ContentView.swift in Sources */,
 			);

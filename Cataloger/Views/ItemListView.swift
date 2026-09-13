@@ -87,6 +87,25 @@ struct ItemListView: View {
                         )
                     }
                 }
+                // Refreshing is deliberately non-blocking — rows from the
+                // disk cache are already usable, so this is a quiet hint
+                // rather than a spinner over the top of them.
+                .overlay(alignment: .top) {
+                    if store.isRefreshing && !store.visibleAssets.isEmpty {
+                        HStack(spacing: 6) {
+                            ProgressView().controlSize(.small)
+                            Text("Updating…")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(.regularMaterial, in: Capsule())
+                        .padding(.top, 4)
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.default, value: store.isRefreshing)
                 .overlay(alignment: .bottom) {
                     if store.selectedAssetIDs.count > 1 {
                         BatchActionBar(selectedIDs: store.selectedAssetIDs)
