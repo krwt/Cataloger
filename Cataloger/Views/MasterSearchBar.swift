@@ -5,6 +5,13 @@ struct MasterSearchBar: View {
     @Binding var isAddSheetPresented: Bool
     @Environment(AppStore.self) private var store
     @FocusState.Binding var isSearchFocused: Bool
+    /// The compact layout hides the navigation bar, so the filter control
+    /// moves here — into the row that already owns the other list-level
+    /// actions. Off by default so the iPad content column, which keeps a
+    /// real sidebar column, doesn't show a redundant button.
+    var showFilterButton: Bool = false
+    var isFilterActive: Bool = false
+    var onFilterTap: () -> Void = {}
     /// Local, unobserved draft the TextField binds to. Typing into this
     /// costs nothing beyond a plain `@State` update — it doesn't touch
     /// `store.searchText`, which is what actually drives `visibleAssets`
@@ -38,8 +45,7 @@ struct MasterSearchBar: View {
                 showContextMenu = true
             } label: {
                 Image(systemName: "ellipsis.circle")
-            }
-            .popover(isPresented: $showContextMenu) {
+            }            .popover(isPresented: $showContextMenu) {
                 ContextMenuPanel(
                     onExportCSV: { closeMenuThen { exportCSV() } },
                     onRestoreCSV: { closeMenuThen { showCSVRestoreImporter = true } },
@@ -49,6 +55,17 @@ struct MasterSearchBar: View {
                     onDeleteAll: { closeMenuThen { showDeleteAllWarning1 = true } }
                 ).environment(store)
                 .frame(minWidth: 260)
+            }
+
+            if showFilterButton {
+                Button {
+                    onFilterTap()
+                } label: {
+                    Image(systemName: isFilterActive
+                          ? "line.3.horizontal.decrease.circle.fill"
+                          : "line.3.horizontal.decrease.circle")
+                }
+                .accessibilityLabel("Filter")
             }
 
             HStack {

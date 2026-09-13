@@ -51,7 +51,11 @@ struct ItemListView: View {
         NavigationStack(path: $navigationPath) {
             VStack(spacing: 0) {
                 MasterSearchBar(
-                    isAddSheetPresented: $isAddSheetPresented, isSearchFocused: $isSearchFocused
+                    isAddSheetPresented: $isAddSheetPresented,
+                    isSearchFocused: $isSearchFocused,
+                    showFilterButton: needsFilterButton,
+                    isFilterActive: isFilterActive,
+                    onFilterTap: { isFilterSheetPresented = true }
                 ).padding(.vertical, 8)
 
                 List(selection: $store.selectedAssetIDs) {
@@ -120,8 +124,20 @@ struct ItemListView: View {
                 }
                 .animation(.default, value: store.isRefreshing)
                 .overlay(alignment: .bottom) {
-                    if store.selectedAssetIDs.count > 1 {
-                        BatchActionBar(selectedIDs: store.selectedAssetIDs)
+                    // Shown for the WHOLE of select mode, not just at 2+
+                    // selected. With the navigation bar hidden this bar owns
+                    // Done, so gating it on a selection count would strand
+                    // the user in select mode with no way out.
+                    if isSelectMode || store.selectedAssetIDs.count > 1 {
+                        BatchActionBar(
+                            selectedIDs: store.selectedAssetIDs,
+                            areAllVisibleSelected: areAllVisibleSelected,
+                            onToggleSelectAll: { toggleSelectAll() },
+                            onDone: {
+                                isSelectMode = false
+                                store.selectedAssetIDs.removeAll()
+                            }
+                        )
                     }
                 }
             }
@@ -131,43 +147,13 @@ struct ItemListView: View {
                 }
             }
             .navigationTitle("Inventory")
-            // Inline rather than the default large title: the large style
-            // reserves a ~52pt block above the list purely for text, and
-            // this screen already identifies itself via the search bar
-            // directly below. Inline keeps the toolbar (filter, Done,
-            // Select All) while reclaiming that space for rows.
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                // Filter button steps aside in select mode — otherwise it
-                // crowds the Done button on the same leading edge, and
-                // changing the filter mid-selection is confusing anyway.
-                if needsFilterButton && !isSelectMode {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            isFilterSheetPresented = true
-                        } label: {
-                            Image(systemName: isFilterActive
-                                  ? "line.3.horizontal.decrease.circle.fill"
-                                  : "line.3.horizontal.decrease.circle")
-                        }
-                        .accessibilityLabel("Filter")
-                    }
-                }
-                if isSelectMode {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Done") {
-                            isSelectMode = false
-                            store.selectedAssetIDs.removeAll()
-                        }
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(areAllVisibleSelected ? "Deselect All" : "Select All") {
-                            toggleSelectAll()
-                        }
-                        .disabled(store.visibleAssets.isEmpty)
-                    }
-                }
-            }
+            // Hidden entirely on the compact path: its controls now live
+            // where they belong — filter in the search row, Done and Select
+            // All in the batch bar — so the bar was pure overhead. Applied
+            // to this screen only (not the NavigationStack), so pushed
+            // destinations like ItemDetailView keep their own bar and back
+            // button.
+            .toolbar(needsFilterButton ? .hidden : .visible, for: .navigationBar)
             .sheet(isPresented: $isFilterSheetPresented) {
                 FilterSheet()
             }

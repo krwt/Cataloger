@@ -1,30 +1,62 @@
 import SwiftUI
 
-/// Bottom overlay bar shown when 2+ assets are selected. Batch Move and
-/// Batch Tag require an explicit confirmation step; Batch Checkout is a
-/// fast, reversible toggle and does not require confirmation.
+/// Bottom overlay bar shown for the whole of multi-select mode.
+///
+/// It now owns Done and Select All in addition to the batch actions, because
+/// the compact layout hides the navigation bar entirely — without that, being
+/// in select mode with fewer than two items selected would leave no way out.
+/// Batch Move and Batch Tag require an explicit confirmation step; Batch
+/// Checkout is a fast, reversible toggle and does not require confirmation.
 struct BatchActionBar: View {
     @Environment(AppStore.self) private var store
     let selectedIDs: Set<String>
+    /// True when everything currently visible is already selected — drives
+    /// the Select All / Deselect All label.
+    let areAllVisibleSelected: Bool
+    let onToggleSelectAll: () -> Void
+    let onDone: () -> Void
 
     @State private var showMoveSheet = false
     @State private var showTagSheet = false
     @State private var moveTarget = ""
     @State private var tagInput = ""
 
+    /// Batch operations need something to operate on. Kept separate from
+    /// whether the bar is shown at all, so the bar can stay up (with Done
+    /// reachable) even at zero selected.
+    private var hasSelection: Bool { !selectedIDs.isEmpty }
+
     var body: some View {
-        HStack(spacing: 20) {
-            Text("\(selectedIDs.count) selected")
+        VStack(spacing: 10) {
+            HStack {
+                Text(selectedIDs.isEmpty ? "Select items" : "\(selectedIDs.count) selected")
+                    .font(.footnote)
+                    .foregroundStyle(Color.secondary)
+
+                Spacer()
+
+                Button(areAllVisibleSelected ? "Deselect All" : "Select All") {
+                    onToggleSelectAll()
+                }
                 .font(.footnote)
-                .foregroundStyle(Color.secondary)
 
-            Spacer()
-
-            Button("Move") { showMoveSheet = true }
-            Button("Checkout") {
-                Task { await store.batchToggleCheckout(ids: selectedIDs) }
+                Button("Done") { onDone() }
+                    .font(.footnote.weight(.semibold))
             }
-            Button("Tag") { showTagSheet = true }
+
+            Divider()
+
+            HStack(spacing: 20) {
+                Button("Move") { showMoveSheet = true }
+                    .disabled(!hasSelection)
+                Button("Checkout") {
+                    Task { await store.batchToggleCheckout(ids: selectedIDs) }
+                }
+                .disabled(!hasSelection)
+                Button("Tag") { showTagSheet = true }
+                    .disabled(!hasSelection)
+                Spacer()
+            }
         }
         .padding()
         .background(.regularMaterial)
