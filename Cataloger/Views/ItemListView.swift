@@ -7,6 +7,20 @@ struct ItemListView: View {
     @FocusState private var isSearchFocused: Bool
     @State private var isSelectMode = false
     @State private var isAddSheetPresented = false
+    @State private var isFilterSheetPresented = false
+
+    /// True when the sidebar taxonomy isn't reachable any other way — i.e.
+    /// the compact/iPhone path, where this view is rendered standalone
+    /// rather than as the content column of a NavigationSplitView. Keyed
+    /// off `onSelect` for the same reason the row-tap behavior is: inside
+    /// a split view the content column reports its own (often .compact)
+    /// size class, so `horizontalSizeClass` can't distinguish the two.
+    private var needsFilterButton: Bool { onSelect == nil }
+
+    /// Whether a non-default filter is currently narrowing the list —
+    /// drives the filled/unfilled toolbar icon so it's obvious at a glance
+    /// that the list isn't showing everything.
+    private var isFilterActive: Bool { (store.activeSidebarFilter ?? .all) != .all }
 
     /// When non-nil, tapping a row calls this instead of pushing onto this
     /// view's own NavigationStack. WidescreenContainer passes a closure that
@@ -72,6 +86,18 @@ struct ItemListView: View {
             }
             .navigationTitle("Inventory")
             .toolbar {
+                if needsFilterButton {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            isFilterSheetPresented = true
+                        } label: {
+                            Image(systemName: isFilterActive
+                                  ? "line.3.horizontal.decrease.circle.fill"
+                                  : "line.3.horizontal.decrease.circle")
+                        }
+                        .accessibilityLabel("Filter")
+                    }
+                }
                 if isSelectMode {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("Done") {
@@ -80,6 +106,9 @@ struct ItemListView: View {
                         }
                     }
                 }
+            }
+            .sheet(isPresented: $isFilterSheetPresented) {
+                FilterSheet()
             }
         }
         // MARK: Desktop-class keyboard shortcuts (iPad & Mac hardware keyboard)
@@ -102,6 +131,12 @@ struct ItemListView: View {
             if isSearchFocused {
                 store.searchText = ""
                 isSearchFocused = false
+                return .handled
+            }
+            // Mirrors WidescreenContainer's escape-clears-filter behavior,
+            // so the two paths behave the same on a hardware keyboard.
+            if isFilterActive {
+                store.activeSidebarFilter = .all
                 return .handled
             }
             return .ignored

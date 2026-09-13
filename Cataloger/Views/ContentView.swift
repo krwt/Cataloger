@@ -79,6 +79,39 @@ struct WidescreenContainer: View {
     }
 }
 
+/// iPhone presentation of `SidebarView`.
+///
+/// On iPad/Mac the sidebar is a real column of `NavigationSplitView`, which
+/// supplies its own show/hide toggle. The compact path renders `ItemListView`
+/// alone with no split view, so the whole filter taxonomy (views, containers,
+/// tags, stats) had no way to be reached at all. This presents the exact same
+/// `SidebarView` as a sheet, so the two platforms can't drift apart — there's
+/// only one sidebar implementation.
+///
+/// Dismisses as soon as a filter is chosen: on iPhone the list is behind the
+/// sheet, so staying open would hide the result of the tap.
+struct FilterSheet: View {
+    @Environment(AppStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            SidebarView()
+                .navigationTitle("Filter")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
+        }
+        .presentationDetents([.medium, .large])
+        .onChange(of: store.activeSidebarFilter) { _, _ in
+            dismiss()
+        }
+    }
+}
+
 /// Split out of WidescreenContainer's body: a single `List` builder mixing
 /// multiple `ForEach`s, string-interpolated `Label`s, and enum `.tag(...)`
 /// calls across several `Section`s is enough to blow past the type
@@ -109,28 +142,15 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: selectionBinding) {
-            SidebarSyncSection(pendingSyncCount: store.pendingSyncCount)
+            SidebarStatsSection(totalCount: store.assets.count, pendingSyncCount: store.pendingSyncCount)
             SidebarViewsSection()
             SidebarContainersSection(containers: store.allContainers)
             SidebarTagsSection(tags: store.allTagsWithCounts)
-            SidebarStatsSection(totalCount: store.assets.count, pendingSyncCount: store.pendingSyncCount)
+            
         }
     }
 }
-private struct SidebarSyncSection: View {
-    let pendingSyncCount: Int
-    var body: some View {
-        
-            Section("Sync"){
-                //LabeledContent("sync count", value: "0")
-                if pendingSyncCount > 0 {
-                    LabeledContent("Awaiting Sync", value: "\(pendingSyncCount)")
-                        .foregroundStyle(.orange)
-                }
-            }
-        
-    }
-}
+
 
 private struct SidebarStatsSection: View {
     let totalCount: Int
