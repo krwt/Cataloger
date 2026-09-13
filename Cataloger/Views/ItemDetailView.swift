@@ -28,6 +28,7 @@ struct ItemDetailView: View {
     @State private var deleteConfirmArmed = false
     @State private var showCamera = false
     @State private var isUploadingImage = false
+    @State private var showImagePreview = false
 
     var body: some View {
         Form {
@@ -81,10 +82,19 @@ struct ItemDetailView: View {
             }
 
             Section("Photo") {
-                ThumbnailView(asset: asset)
-                    .frame(height: 160)
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                Button {
+                    showImagePreview = true
+                } label: {
+                    ThumbnailView(asset: asset)
+                        .frame(height: 160)
+                        .frame(maxWidth: .infinity)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        .contentShape(Rectangle())
+                }
+                // Plain so the thumbnail doesn't pick up button tinting or
+                // a pressed-state overlay — same treatment as the row
+                // thumbnail in ItemRowView.
+                .buttonStyle(.plain)
 
                 Button {
                     showCamera = true
@@ -116,6 +126,9 @@ struct ItemDetailView: View {
                     .focused($focusedField, equals: .save)
                     .keyboardShortcut("s", modifiers: .command)
             }
+        }
+        .sheet(isPresented: $showImagePreview) {
+            FullScreenImagePreview(asset: asset)
         }
         .sheet(isPresented: $showScanner) {
             QRScannerView(onCode: handleScannedCode, onCancel: { showScanner = false })

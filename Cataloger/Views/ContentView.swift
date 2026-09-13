@@ -146,8 +146,14 @@ struct SidebarView: View {
             SidebarViewsSection()
             SidebarContainersSection(containers: store.allContainers)
             SidebarTagsSection(tags: store.allTagsWithCounts)
-            
         }
+        // Set explicitly rather than relying on the inferred style.
+        // `Section(isExpanded:)` only renders its disclosure control in list
+        // styles that support it — the NavigationSplitView sidebar column
+        // infers `.sidebar` already, but this same view is also presented as
+        // a sheet on iPhone (`FilterSheet`), where it wouldn't. Pinning it
+        // keeps the collapse behavior identical in both places.
+        .listStyle(.sidebar)
     }
 }
 
@@ -182,9 +188,14 @@ private struct SidebarViewsSection: View {
 
 private struct SidebarContainersSection: View {
     let containers: [String]
+    /// Persisted so the sidebar reopens the way you left it rather than
+    /// re-expanding a long list on every launch.
+    @AppStorage("sidebarContainersExpanded") private var isExpanded = true
 
     var body: some View {
-        Section("Containers") {
+        // Count stays in the header so a collapsed section still tells you
+        // what's inside it.
+        Section("Containers (\(containers.count))", isExpanded: $isExpanded) {
             ForEach(containers, id: \.self) { container in
                 SidebarContainerRow(container: container)
             }
@@ -203,9 +214,10 @@ private struct SidebarContainerRow: View {
 
 private struct SidebarTagsSection: View {
     let tags: [(tag: String, count: Int)]
+    @AppStorage("sidebarTagsExpanded") private var isExpanded = true
 
     var body: some View {
-        Section("Tags") {
+        Section("Tags (\(tags.count))", isExpanded: $isExpanded) {
             ForEach(tags, id: \.tag) { entry in
                 SidebarTagRow(tag: entry.tag, count: entry.count)
             }

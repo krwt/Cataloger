@@ -139,24 +139,114 @@ struct ThumbnailView: View {
     }
 }
 
+/// Full-screen image viewer with pinch-to-zoom, pan, and double-tap.
+/// Shared by the list row thumbnail and the detail view's photo.
 struct FullScreenImagePreview: View {
     let asset: Asset
     @Environment(\.dismiss) private var dismiss
 
+    /// Committed zoom/pan, updated when a gesture ends.
+    @State private var scale: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    /// Live gesture values. `@GestureState` auto-resets when the gesture
+    /// ends, so the in-progress transform is kept separate from the
+    /// committed one rather than being written on every delta.
+    @GestureState private var pinchScale: CGFloat = 1
+    @GestureState private var dragTranslation: CGSize = .zero
+
+    private let minScale: CGFloat = 1
+    private let maxScale: CGFloat = 6
+    private let doubleTapScale: CGFloat = 3
+
+    private var effectiveScale: CGFloat {
+        min(max(scale * pinchScale, minScale), maxScale)
+    }
+
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
-            ThumbnailView(asset: asset)
-                .aspectRatio(contentMode: .fit)
+        GeometryReader { geo in
+            ZStack(alignment: .topTrailing) {
+                Color.black.ignoresSafeArea()
+
+                ThumbnailView(asset: asset)
+                    .aspectRatio(contentMode: .fit)
+                    .scaleEffect(effectiveScale)
+                    .offset(
+                        x: offset.width + dragTranslation.width,
+                        y: offset.height + dragTranslation.height
+                    )
+                    .gesture(magnifyGesture(in: geo.size))
+                    // Simultaneous so pinching and repositioning can happen
+                    // in one continuous motion instead of requiring the
+                    // user to lift and start over.
+                    .simultaneousGesture(dragGesture(in: geo.size))
+                    .onTapGesture(count: 2) { toggleZoom(in: geo.size) }
+                    .animation(.interactiveSpring, value: scale)
+                    .animation(.interactiveSpring, value: offset)
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(.white)
+                        .shadow(radius: 3)
+                }
                 .padding()
-            Button {
-                dismiss()
-            } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(.white)
             }
-            .padding()
         }
+    }
+
+    private func magnifyGesture(in size: CGSize) -> some Gesture {
+        MagnifyGesture()
+            .updating($pinchScale) { value, state, _ in
+                state = value.magnification
+            }
+            .onEnded { value in
+                scale = min(max(scale * value.magnification, minScale), maxScale)
+                // Zooming back out re-centers, so the image can't be left
+                // parked off-screen at 1x with no way to bring it back.
+                offset = scale <= minScale ? .zero : clamped(offset, scale: scale, in: size)
+            }
+    }
+
+    private func dragGesture(in size: CGSize) -> some Gesture {
+        DragGesture()
+            .updating($dragTranslation) { value, state, _ in
+                // Only pan when actually zoomed in — otherwise dragging a
+                // fit-to-screen image just slides it around pointlessly.
+                guard scale > minScale else { return }
+                state = value.translation
+            }
+            .onEnded { value in
+                guard scale > minScale else { return }
+                offset = clamped(
+                    CGSize(
+                        width: offset.width + value.translation.width,
+                        height: offset.height + value.translation.height
+                    ),
+                    scale: scale,
+                    in: size
+                )
+            }
+    }
+
+    private func toggleZoom(in size: CGSize) {
+        if scale > minScale {
+            scale = minScale
+            offset = .zero
+        } else {
+            scale = doubleTapScale
+        }
+    }
+
+    /// Keeps the image from being dragged past its own edges, so you can't
+    /// fling it into empty space and lose it.
+    private func clamped(_ proposed: CGSize, scale: CGFloat, in size: CGSize) -> CGSize {
+        let maxX = max((size.width * (scale - 1)) / 2, 0)
+        let maxY = max((size.height * (scale - 1)) / 2, 0)
+        return CGSize(
+            width: min(max(proposed.width, -maxX), maxX),
+            height: min(max(proposed.height, -maxY), maxY)
+        )
     }
 }
