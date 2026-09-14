@@ -49,6 +49,7 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
     // Review step — shown after the shutter fires so the photo can be
     // checked before it's committed. UIImagePickerController provided this
     // for free; building on AVCapture means providing it explicitly.
+    private let hintLabel = UILabel()
     private let reviewImageView = UIImageView()
     private let retakeButton = UIButton(type: .system)
     private let useButton = UIButton(type: .system)
@@ -67,6 +68,52 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
             DispatchQueue.global(qos: .userInitiated).async { [session] in
                 session.startRunning()
             }
+        }
+        // Key commands are only delivered to the first responder.
+        becomeFirstResponder()
+    }
+
+    // MARK: - Keyboard
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    /// Return and Escape are context-sensitive: they act on the shutter while
+    /// the preview is live, and on the review buttons once a photo is taken.
+    /// Two keys covering four actions, matching what the on-screen buttons
+    /// show at that moment.
+    override var keyCommands: [UIKeyCommand]? {
+        let isReviewing = pendingImage != nil
+
+        let returnCommand = UIKeyCommand(
+            title: isReviewing ? "Use Photo" : "Take Photo",
+            action: #selector(returnKeyPressed),
+            input: "\r"
+        )
+        let escapeCommand = UIKeyCommand(
+            title: isReviewing ? "Retake" : "Cancel",
+            action: #selector(escapeKeyPressed),
+            input: UIKeyCommand.inputEscape
+        )
+        // Without this the system can claim these first — Escape in
+        // particular is used to dismiss presented content.
+        returnCommand.wantsPriorityOverSystemBehavior = true
+        escapeCommand.wantsPriorityOverSystemBehavior = true
+        return [returnCommand, escapeCommand]
+    }
+
+    @objc private func returnKeyPressed() {
+        if pendingImage != nil {
+            useTapped()
+        } else {
+            captureTapped()
+        }
+    }
+
+    @objc private func escapeKeyPressed() {
+        if pendingImage != nil {
+            retakeTapped()
+        } else {
+            cancelTapped()
         }
     }
 
@@ -182,6 +229,16 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         statusLabel.isHidden = true
         view.addSubview(statusLabel)
 
+        // Keyboard shortcuts are invisible otherwise. Shown only where a
+        // hardware keyboard is a given, so it isn't clutter on iPhone.
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        hintLabel.textColor = UIColor.white.withAlphaComponent(0.7)
+        hintLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        hintLabel.textAlignment = .center
+        hintLabel.isHidden = !hasHardwareKeyboard
+        view.addSubview(hintLabel)
+        updateHint()
+
         reviewImageView.translatesAutoresizingMaskIntoConstraints = false
         reviewImageView.contentMode = .scaleAspectFit
         reviewImageView.backgroundColor = .black
@@ -218,6 +275,9 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
             statusLabel.leadingAnchor.constraint(greaterThanOrEqualTo: view.leadingAnchor, constant: 24),
             statusLabel.trailingAnchor.constraint(lessThanOrEqualTo: view.trailingAnchor, constant: -24),
 
+            hintLabel.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            hintLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -8),
+
             reviewImageView.topAnchor.constraint(equalTo: view.topAnchor),
             reviewImageView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             reviewImageView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -229,6 +289,16 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
             useButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
             useButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -32)
         ])
+    }
+
+    private var hasHardwareKeyboard: Bool {
+        ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp
+    }
+
+    private func updateHint() {
+        hintLabel.text = pendingImage == nil
+            ? "⏎ Take Photo   ·   esc Cancel"
+            : "⏎ Use Photo   ·   esc Retake"
     }
 
     private func showStatus(_ message: String) {
@@ -294,6 +364,8 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         // Bring review chrome above the full-bleed image view.
         view.bringSubviewToFront(retakeButton)
         view.bringSubviewToFront(useButton)
+        updateHint()
+        view.bringSubviewToFront(hintLabel)
     }
 
     @objc private func retakeTapped() {
@@ -304,6 +376,7 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         useButton.isHidden = true
         shutterButton.isHidden = false
         cancelButton.isHidden = false
+        updateHint()
         if !session.isRunning {
             DispatchQueue.global(qos: .userInitiated).async { [session] in
                 session.startRunning()
@@ -315,5 +388,52 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         guard let image = pendingImage, !hasCaptured else { return }
         hasCaptured = true
         onCapture?(image)
+    }
+}
+
+// MARK: - Presentation
+
+extension View {
+    /// Presents the camera windowed on Mac and full-screen everywhere else.
+    ///
+    /// A plain `.sheet` is windowed on Mac but renders as a page sheet on
+    /// iPhone — inset card, drag-to-dismiss grabber, not edge to edge — which
+    /// looks wrong for a camera. A plain `.fullScreenCover` is right on
+    /// iPhone but takes over the entire display on Mac. This picks per
+    /// platform, and applies the matching safe-area treatment: full-screen
+    /// wants `.ignoresSafeArea()`, while a window needs the controls kept
+    /// inside the visible card.
+    func cameraPresentation<CameraContent: View>(
+        isPresented: Binding<Bool>,
+        @ViewBuilder content: @escaping () -> CameraContent
+    ) -> some View {
+        modifier(CameraPresentationModifier(isPresented: isPresented, cameraContent: content))
+    }
+}
+
+private struct CameraPresentationModifier<CameraContent: View>: ViewModifier {
+    @Binding var isPresented: Bool
+    let cameraContent: () -> CameraContent
+
+    /// Constant for the lifetime of the process, so branching on it doesn't
+    /// cause view identity to churn.
+    private var isWindowed: Bool {
+        ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp
+    }
+
+    func body(content: Content) -> some View {
+        if isWindowed {
+            content.sheet(isPresented: $isPresented) {
+                cameraContent()
+                    // Keeps the capture window usable rather than collapsing
+                    // to the sheet's natural content-driven size.
+                    .frame(minWidth: 480, minHeight: 640)
+            }
+        } else {
+            content.fullScreenCover(isPresented: $isPresented) {
+                cameraContent()
+                    .ignoresSafeArea()
+            }
+        }
     }
 }

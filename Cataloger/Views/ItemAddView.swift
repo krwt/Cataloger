@@ -168,12 +168,9 @@ struct ItemAddView: View {
                 QRScannerView(onCode: handleScannedCode, onCancel: { showScanner = false })
                     .ignoresSafeArea()
             }
-            // Presented as a sheet rather than a fullScreenCover so it appears
-            // windowed on iPad and Mac instead of taking over the whole display.
-            // `.ignoresSafeArea()` is deliberately dropped — inside a windowed
-            // sheet it would push the shutter and Cancel controls outside the
-            // visible card.
-            .sheet(isPresented: $showCamera) {
+            // Windowed on Mac, full-screen on iPhone/iPad — see
+            // `cameraPresentation` in CameraCaptureView.swift.
+            .cameraPresentation(isPresented: $showCamera) {
                 CameraCaptureView(
                     onCapture: { image in
                         showCamera = false
@@ -181,9 +178,6 @@ struct ItemAddView: View {
                     },
                     onCancel: { showCamera = false }
                 )
-                // Keeps the capture window usable rather than collapsing to the
-                // sheet's natural (content-driven) size on Mac.
-                .frame(minWidth: 480, minHeight: 640)
             }
             .sheet(item: $showDuplicateDetail) { existing in
                 NavigationStack { ItemDetailView(asset: existing) }
