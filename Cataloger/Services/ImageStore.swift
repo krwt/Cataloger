@@ -78,6 +78,37 @@ enum ImageStore {
         return image
     }
 
+    /// Downloads and decodes the Imgur copy, cached in memory so flipping
+    /// between sources in the preview doesn't re-download each time.
+    /// `AsyncImage` has no persistent cache of its own, which is why this
+    /// exists separately.
+    private static let remoteCache: NSCache<NSString, UIImage> = {
+        let cache = NSCache<NSString, UIImage>()
+        cache.countLimit = 20
+        return cache
+    }()
+
+    static func loadRemoteImage(urlString: String) async -> UIImage? {
+        if let cached = remoteCache.object(forKey: urlString as NSString) { return cached }
+        guard let url = URL(string: urlString),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let image = UIImage(data: data) else {
+            return nil
+        }
+        remoteCache.setObject(image, forKey: urlString as NSString)
+        return image
+    }
+
+    /// Whether a local HEIC exists for this asset, without decoding it.
+    /// Off the main thread — the directory lookup is cached now, but the
+    /// stat still shouldn't happen in a view body.
+    static func hasLocalCopy(assetID: String) async -> Bool {
+        if cachedImage(assetID: assetID) != nil { return true }
+        return await Task.detached(priority: .utility) {
+            FileManager.default.fileExists(atPath: localURL(for: assetID).path)
+        }.value
+    }
+
     /// Drops a stale cache entry — call after replacing an asset's photo so
     /// the list doesn't keep showing the previous image.
     static func invalidateCache(assetID: String) {

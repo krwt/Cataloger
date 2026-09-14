@@ -74,6 +74,12 @@ struct ThumbnailView: View {
     /// pass `true` (the default) since those are explicit navigations
     /// where showing the real image is expected.
     var allowRemoteLoad: Bool = true
+    /// When false, a failed remote load shows an explicit "unavailable"
+    /// state instead of quietly substituting the local copy. The preview's
+    /// source toggle needs this: silently falling back would make the two
+    /// options look identical even when Imgur is unreachable, which defeats
+    /// the point of comparing them.
+    var allowsFallback: Bool = true
     @State private var localImage: UIImage?
     /// Distinguishes "haven't looked on disk yet" from "looked, found
     /// nothing" — without it the placeholder can't tell whether to keep
@@ -88,11 +94,11 @@ struct ThumbnailView: View {
                     case .success(let image):
                         image.resizable().aspectRatio(contentMode: .fill)
                     case .failure:
-                        fallbackOrPlaceholder
+                        if allowsFallback { fallbackOrPlaceholder } else { unavailablePlaceholder }
                     case .empty:
                         ProgressView()
                     @unknown default:
-                        fallbackOrPlaceholder
+                        if allowsFallback { fallbackOrPlaceholder } else { unavailablePlaceholder }
                     }
                 }
             } else {
@@ -118,6 +124,20 @@ struct ThumbnailView: View {
         }
     }
 
+    /// Shown when the requested source specifically can't be displayed and
+    /// substituting the other one would be misleading.
+    @ViewBuilder
+    private var unavailablePlaceholder: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+            Text("Not available from this source")
+                .font(.caption2)
+                .multilineTextAlignment(.center)
+        }
+        .foregroundStyle(Color.secondary)
+        .padding(8)
+    }
+
     @ViewBuilder
     private var fallbackOrPlaceholder: some View {
         if let localImage {
@@ -130,8 +150,14 @@ struct ThumbnailView: View {
             // The item does have an image — it just isn't showing right now
             // (network issue, or preload-off skipped fetching it). Distinct
             // from "no image was ever attached" below.
-            Image(systemName: "photo")
-                .foregroundStyle(Color.secondary)
+            if allowsFallback {
+                Image(systemName: "photo")
+                    .foregroundStyle(Color.secondary)
+            } else {
+                // Local source was explicitly requested and there's no local
+                // copy — say so rather than showing a generic photo icon.
+                unavailablePlaceholder
+            }
         } else {
             Image(systemName: "questionmark")
                 .foregroundStyle(Color.secondary)
@@ -139,114 +165,96 @@ struct ThumbnailView: View {
     }
 }
 
-/// Full-screen image viewer with pinch-to-zoom, pan, and double-tap.
-/// Shared by the list row thumbnail and the detail view's photo.
+/// Full-screen image viewer with zoom, and a toggle between the two stored
+/// copies of the photo.
 struct FullScreenImagePreview: View {
     let asset: Asset
     @Environment(\.dismiss) private var dismiss
 
-    /// Committed zoom/pan, updated when a gesture ends.
-    @State private var scale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    /// Live gesture values. `@GestureState` auto-resets when the gesture
-    /// ends, so the in-progress transform is kept separate from the
-    /// committed one rather than being written on every delta.
-    @GestureState private var pinchScale: CGFloat = 1
-    @GestureState private var dragTranslation: CGSize = .zero
+    /// Which copy is being displayed. The two are encoded differently —
+    /// local is HEIC at 0.8, Imgur is JPEG at 0.8 — so they don't look
+    /// identical, and flipping between them makes it possible to check that
+    /// an upload landed and how it fared.
+    @State private var useRemoteSource = true
+    @State private var hasLocalCopy = false
+    @State private var image: UIImage?
+    @State private var isLoading = true
 
-    private let minScale: CGFloat = 1
-    private let maxScale: CGFloat = 6
-    private let doubleTapScale: CGFloat = 3
+    private var hasRemoteCopy: Bool {
+        !(asset.imgurURLString ?? "").isEmpty
+    }
 
-    private var effectiveScale: CGFloat {
-        min(max(scale * pinchScale, minScale), maxScale)
+    /// Only worth showing when there are genuinely two sources to switch
+    /// between.
+    private var canToggleSource: Bool {
+        hasRemoteCopy && hasLocalCopy
     }
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topTrailing) {
-                Color.black.ignoresSafeArea()
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
 
-                ThumbnailView(asset: asset)
-                    .aspectRatio(contentMode: .fit)
-                    .scaleEffect(effectiveScale)
-                    .offset(
-                        x: offset.width + dragTranslation.width,
-                        y: offset.height + dragTranslation.height
-                    )
-                    .gesture(magnifyGesture(in: geo.size))
-                    // Simultaneous so pinching and repositioning can happen
-                    // in one continuous motion instead of requiring the
-                    // user to lift and start over.
-                    .simultaneousGesture(dragGesture(in: geo.size))
-                    .onTapGesture(count: 2) { toggleZoom(in: geo.size) }
-                    .animation(.interactiveSpring, value: scale)
-                    .animation(.interactiveSpring, value: offset)
-
-                Button {
-                    dismiss()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.title)
-                        .foregroundStyle(.white)
-                        .shadow(radius: 3)
+            if let image {
+                // Full-resolution UIImage handed to UIScrollView, so zooming
+                // samples the original pixels instead of magnifying a
+                // screen-sized raster the way .scaleEffect did.
+                ZoomableImageView(image: image)
+                    .ignoresSafeArea()
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+            } else {
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                    Text("Not available from this source")
+                        .font(.callout)
                 }
-                .padding()
+                .foregroundStyle(.secondary)
             }
+
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title)
+                    .foregroundStyle(.white)
+                    .shadow(radius: 3)
+            }
+            .padding()
+
+            if canToggleSource {
+                VStack {
+                    Spacer()
+                    Picker("Image source", selection: $useRemoteSource) {
+                        Text("Local (HEIC)").tag(false)
+                        Text("Imgur (JPEG)").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 280)
+                    .padding(.bottom, 24)
+                }
+            }
+        }
+        .task {
+            hasLocalCopy = await ImageStore.hasLocalCopy(assetID: asset.id)
+            // Nothing on Imgur — start on the copy that exists rather than
+            // showing an error state first.
+            if !hasRemoteCopy { useRemoteSource = false }
+            await loadImage()
+        }
+        .onChange(of: useRemoteSource) { _, _ in
+            Task { await loadImage() }
         }
     }
 
-    private func magnifyGesture(in size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .updating($pinchScale) { value, state, _ in
-                state = value.magnification
-            }
-            .onEnded { value in
-                scale = min(max(scale * value.magnification, minScale), maxScale)
-                // Zooming back out re-centers, so the image can't be left
-                // parked off-screen at 1x with no way to bring it back.
-                offset = scale <= minScale ? .zero : clamped(offset, scale: scale, in: size)
-            }
-    }
+    private func loadImage() async {
+        isLoading = true
+        defer { isLoading = false }
 
-    private func dragGesture(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .updating($dragTranslation) { value, state, _ in
-                // Only pan when actually zoomed in — otherwise dragging a
-                // fit-to-screen image just slides it around pointlessly.
-                guard scale > minScale else { return }
-                state = value.translation
-            }
-            .onEnded { value in
-                guard scale > minScale else { return }
-                offset = clamped(
-                    CGSize(
-                        width: offset.width + value.translation.width,
-                        height: offset.height + value.translation.height
-                    ),
-                    scale: scale,
-                    in: size
-                )
-            }
-    }
-
-    private func toggleZoom(in size: CGSize) {
-        if scale > minScale {
-            scale = minScale
-            offset = .zero
+        if useRemoteSource, let urlString = asset.imgurURLString, !urlString.isEmpty {
+            image = await ImageStore.loadRemoteImage(urlString: urlString)
         } else {
-            scale = doubleTapScale
+            image = await ImageStore.loadImage(assetID: asset.id)
         }
-    }
-
-    /// Keeps the image from being dragged past its own edges, so you can't
-    /// fling it into empty space and lose it.
-    private func clamped(_ proposed: CGSize, scale: CGFloat, in size: CGSize) -> CGSize {
-        let maxX = max((size.width * (scale - 1)) / 2, 0)
-        let maxY = max((size.height * (scale - 1)) / 2, 0)
-        return CGSize(
-            width: min(max(proposed.width, -maxX), maxX),
-            height: min(max(proposed.height, -maxY), maxY)
-        )
     }
 }

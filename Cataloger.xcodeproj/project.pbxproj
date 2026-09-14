@@ -47,6 +47,10 @@
 		946814383048FF04004A38DA /* CameraCaptureView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 946814373048FF04004A38DA /* CameraCaptureView.swift */; };
 		9468143A30493C17004A38DA /* iCloudPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9468143930493C17004A38DA /* iCloudPaths.swift */; };
 		9468143B30493C17004A38DA /* iCloudPaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9468143930493C17004A38DA /* iCloudPaths.swift */; };
+		94B1CC0E30576A3C005D4674 /* BackgroundActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94B1CC0D30576A3C005D4674 /* BackgroundActivity.swift */; };
+		94B1CC0F30576A3C005D4674 /* BackgroundActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94B1CC0D30576A3C005D4674 /* BackgroundActivity.swift */; };
+		94B1CC17305774D0005D4674 /* ZoomableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94B1CC16305774D0005D4674 /* ZoomableImageView.swift */; };
+		94B1CC18305774D0005D4674 /* ZoomableImageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94B1CC16305774D0005D4674 /* ZoomableImageView.swift */; };
 		94BF01B924C1573D00319C89 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01B824C1573D00319C89 /* Assets.xcassets */; };
 		94BF01BC24C1573D00319C89 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */; };
 		94BF01CA24C1573D00319C89 /* CatalogerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94BF01C924C1573D00319C89 /* CatalogerTests.swift */; };
@@ -104,6 +108,8 @@
 		946814353048ED08004A38DA /* HEICHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HEICHelper.swift; sourceTree = "<group>"; };
 		946814373048FF04004A38DA /* CameraCaptureView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraCaptureView.swift; sourceTree = "<group>"; };
 		9468143930493C17004A38DA /* iCloudPaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iCloudPaths.swift; sourceTree = "<group>"; };
+		94B1CC0D30576A3C005D4674 /* BackgroundActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundActivity.swift; sourceTree = "<group>"; };
+		94B1CC16305774D0005D4674 /* ZoomableImageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImageView.swift; sourceTree = "<group>"; };
 		94BF01AF24C1573C00319C89 /* Cataloger.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Cataloger.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		94BF01B824C1573D00319C89 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		94BF01BB24C1573D00319C89 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
@@ -172,6 +178,7 @@
 				94FD8D4230562273008AD340 /* LabelGenerator.swift */,
 				94F718003056BD1100CE51C6 /* AssetCache.swift */,
 				94FD8D3330561244008AD340 /* Array+Chunked.swift */,
+				94B1CC0D30576A3C005D4674 /* BackgroundActivity.swift */,
 				946814013048ECCE004A38DA /* CloudKitManager.swift */,
 				946814023048ECCE004A38DA /* CSVExportManager.swift */,
 				94FD8D363056126E008AD340 /* CSVParser.swift */,
@@ -190,6 +197,7 @@
 			isa = PBXGroup;
 			children = (
 				94FD8D3F30561315008AD340 /* TagEditorSection.swift */,
+				94B1CC16305774D0005D4674 /* ZoomableImageView.swift */,
 				946814083048ECCE004A38DA /* BatchActionBar.swift */,
 				946814093048ECCE004A38DA /* ContentView.swift */,
 				9468140A3048ECCE004A38DA /* ItemAddView.swift */,
@@ -398,10 +406,12 @@
 				946814123048ECCE004A38DA /* PendingMutation.swift in Sources */,
 				946814133048ECCE004A38DA /* ItemListView.swift in Sources */,
 				946814143048ECCE004A38DA /* CSVExportManager.swift in Sources */,
+				94B1CC17305774D0005D4674 /* ZoomableImageView.swift in Sources */,
 				946814153048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814163048ECCE004A38DA /* CatalogerApp.swift in Sources */,
 				94F718023056BD1100CE51C6 /* AssetCache.swift in Sources */,
 				946814173048ECCE004A38DA /* ImgurUploadManager.swift in Sources */,
+				94B1CC0E30576A3C005D4674 /* BackgroundActivity.swift in Sources */,
 				94FD8D4130561315008AD340 /* TagEditorSection.swift in Sources */,
 				946814183048ECCE004A38DA /* MasterSearchBar.swift in Sources */,
 				94FD8D3430561244008AD340 /* Array+Chunked.swift in Sources */,
@@ -441,6 +451,7 @@
 				946814243048ECCE004A38DA /* PendingMutation.swift in Sources */,
 				946814253048ECCE004A38DA /* ItemListView.swift in Sources */,
 				946814263048ECCE004A38DA /* CSVExportManager.swift in Sources */,
+				94B1CC0F30576A3C005D4674 /* BackgroundActivity.swift in Sources */,
 				94FD8D3A305612A3008AD340 /* CSVBackupManager.swift in Sources */,
 				946814273048ECCE004A38DA /* ItemAddView.swift in Sources */,
 				946814283048ECCE004A38DA /* CatalogerApp.swift in Sources */,
@@ -460,6 +471,7 @@
 				946814333048ECCE004A38DA /* BatchActionBar.swift in Sources */,
 				94FD8D3530561244008AD340 /* Array+Chunked.swift in Sources */,
 				94F718013056BD1100CE51C6 /* AssetCache.swift in Sources */,
+				94B1CC18305774D0005D4674 /* ZoomableImageView.swift in Sources */,
 				94FD8D373056126E008AD340 /* CSVParser.swift in Sources */,
 				946814343048ECCE004A38DA /* ContentView.swift in Sources */,
 			);

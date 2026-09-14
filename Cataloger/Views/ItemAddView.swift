@@ -11,6 +11,9 @@ struct ItemAddView: View {
     @State private var showQRConflictAlert = false
     @State private var showCamera = false
     @State private var isUploadingImage = false
+    /// The just-captured photo, held so the Photo section can show it
+    /// immediately — before (and independently of) the Imgur upload.
+    @State private var capturedImage: UIImage?
     @State private var showDuplicateDetail: Asset?
     @State private var showSavedConfirmation = false
 
@@ -60,16 +63,14 @@ struct ItemAddView: View {
 
                     TextField("Container Location", text: $asset.containerLocation)
                         .focused($focusedField, equals: .container)
-                        // Container is the last field bound to
-                        // `focusedField`. It deliberately does NOT set
-                        // focus to `.qrScan` anymore — that's a plain
-                        // Button, so assigning it just nils focus out.
-                        // Return commits the item; Tab falls through to
-                        // the tag field natively.
-                        .onSubmit { save() }
+                        .onSubmit {
+                            print("⏎ Container onSubmit fired")
+                            focusedField = .qrScan
+                        }
                         .onChange(of: asset.containerLocation) { _, newValue in
                             if newValue.contains("\t") {
                                 asset.containerLocation = newValue.replacingOccurrences(of: "\t", with: "")
+                                focusedField = .qrScan
                             }
                         }
                         .focusBorder(focusedField == .container)
@@ -89,27 +90,50 @@ struct ItemAddView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    // No `.focused(...)` — a plain Button can't take
-                    // keyboard focus on iOS, so binding one here just
-                    // created an AssetField value nothing could hold.
-                    // Reachable via Cmd+1 instead.
+                    .focused($focusedField, equals: .qrScan)
+                    .focusBorder(focusedField == .qrScan)
                 }
 
                 Section("Photo") {
+                    // Shows the photo as soon as it's captured, from the
+                    // in-memory UIImage. The section previously had no
+                    // preview at all — just the button and the upload
+                    // spinner — so taking a photo gave no visual
+                    // confirmation it worked. Displaying the captured image
+                    // directly (rather than going through ThumbnailView)
+                    // avoids waiting on the Imgur upload or a disk read.
+                    if let capturedImage {
+                        Image(uiImage: capturedImage)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 160)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(alignment: .bottomTrailing) {
+                                if isUploadingImage {
+                                    HStack(spacing: 6) {
+                                        ProgressView().controlSize(.small)
+                                        Text("Uploading…").font(.caption2)
+                                    }
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.regularMaterial, in: Capsule())
+                                    .padding(8)
+                                }
+                            }
+                    }
+
                     Button {
                         showCamera = true
                     } label: {
-                        Label("Take Photo", systemImage: "camera")
+                        Label(capturedImage == nil ? "Take Photo" : "Retake Photo", systemImage: "camera")
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    // Reachable via Cmd+2 — see note on the QR button above.
+                    .focused($focusedField, equals: .image)
+                    .focusBorder(focusedField == .image)
                     .disabled(isUploadingImage)
-
-                    if isUploadingImage {
-                        ProgressView("Uploading...")
-                    }
                 }
             }
             .navigationTitle("New Item")
@@ -123,6 +147,7 @@ struct ItemAddView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
+                        .focused($focusedField, equals: .save)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(asset.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -143,7 +168,12 @@ struct ItemAddView: View {
                 QRScannerView(onCode: handleScannedCode, onCancel: { showScanner = false })
                     .ignoresSafeArea()
             }
-            .fullScreenCover(isPresented: $showCamera) {
+            // Presented as a sheet rather than a fullScreenCover so it appears
+            // windowed on iPad and Mac instead of taking over the whole display.
+            // `.ignoresSafeArea()` is deliberately dropped — inside a windowed
+            // sheet it would push the shutter and Cancel controls outside the
+            // visible card.
+            .sheet(isPresented: $showCamera) {
                 CameraCaptureView(
                     onCapture: { image in
                         showCamera = false
@@ -151,7 +181,9 @@ struct ItemAddView: View {
                     },
                     onCancel: { showCamera = false }
                 )
-                .ignoresSafeArea()
+                // Keeps the capture window usable rather than collapsing to the
+                // sheet's natural (content-driven) size on Mac.
+                .frame(minWidth: 480, minHeight: 640)
             }
             .sheet(item: $showDuplicateDetail) { existing in
                 NavigationStack { ItemDetailView(asset: existing) }
@@ -161,30 +193,40 @@ struct ItemAddView: View {
             } message: {
                 Text("That code is already linked to another item. Scan a different label.")
             }
-            // MARK: Keyboard actions for the button-based fields.
-            //
-            // These used to be `.onKeyPress(.tab)` / `.onKeyPress(.return)`
-            // handlers that switched on `focusedField == .qrScan / .image
-            // / .save`. That approach can't work here: all three are
-            // `.buttonStyle(.plain)` Buttons, which aren't keyboard-
-            // focusable on iOS, so `focusedField` never actually holds
-            // those values. Tab out of Container goes to the *next
-            // focusable view* (the tag field), and `focusedField` nils
-            // out — confirmed by the "container -> nil" focus log.
-            //
-            // Hidden Button + `.keyboardShortcut` is the one mechanism
-            // that works window-wide regardless of what currently holds
-            // focus — the same pattern already used for Cmd+F in
-            // ItemListView. Save keeps its existing Cmd+S.
-            .background {
-                VStack {
-                    Button("") { showScanner = true }
-                        .keyboardShortcut("1", modifiers: .command)
-                    Button("") { showCamera = true }
-                        .keyboardShortcut("2", modifiers: .command)
-                        .disabled(isUploadingImage)
+            // Only advances focus for the button-based fields (QR Label ->
+            // Take Photo -> Save) — the text fields (name/description/
+            // container) advance via their own onSubmit/onChange handlers
+            // above. Having both act on the same field was causing a
+            // double-advance race that cascaded focus straight to Save
+            // after a single keystroke.
+            .onKeyPress(.tab) {
+                guard let current = focusedField, current == .qrScan || current == .image else { return .ignored }
+                guard let next = current.next else { return .ignored }
+                focusedField = next
+                return .handled
+            }
+            // Dispatches Enter to whichever button currently has focus.
+            // Stacking multiple `.keyboardShortcut(.defaultAction)`
+            // modifiers doesn't work the way it sounds — SwiftUI resolves
+            // to a single global default action (in practice, the
+            // last-declared one), not "whichever button has focus", so
+            // Enter always fired Take Photo regardless of what was
+            // actually focused. This checks focus explicitly instead.
+            .onKeyPress(.return) {
+                print("↩️ onKeyPress(.return) fired, focusedField = \(String(describing: focusedField))")
+                switch focusedField {
+                case .qrScan:
+                    showScanner = true
+                    return .handled
+                case .image:
+                    showCamera = true
+                    return .handled
+                case .save:
+                    save()
+                    return .handled
+                default:
+                    return .ignored
                 }
-                .opacity(0)
             }
         }
     }
@@ -200,6 +242,10 @@ struct ItemAddView: View {
             withAnimation { showSavedConfirmation = true }
 
             asset = Asset(name: "", containerLocation: keptContainer)
+            // Cleared with the rest of the form — otherwise the previous
+            // item's photo would sit in the Photo section while the next
+            // item is being entered.
+            capturedImage = nil
             focusedField = .name
 
             try? await Task.sleep(nanoseconds: 1_200_000_000)
@@ -217,6 +263,7 @@ struct ItemAddView: View {
     }
 
     private func handleCapturedPhoto(_ image: UIImage) async {
+        capturedImage = image
         isUploadingImage = true
         defer { isUploadingImage = false }
         let imgurURL = await ImageStore.dualUpload(
