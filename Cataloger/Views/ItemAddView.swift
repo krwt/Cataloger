@@ -63,14 +63,14 @@ struct ItemAddView: View {
 
                     TextField("Container Location", text: $asset.containerLocation)
                         .focused($focusedField, equals: .container)
-                        .onSubmit {
-                            print("⏎ Container onSubmit fired")
-                            focusedField = .qrScan
-                        }
+                        // Container is the last field bound to
+                        // `focusedField`. It deliberately does NOT set focus
+                        // to `.qrScan` — that's a plain Button, so assigning
+                        // it just nils focus out. Return commits the item.
+                        .onSubmit { save() }
                         .onChange(of: asset.containerLocation) { _, newValue in
                             if newValue.contains("\t") {
                                 asset.containerLocation = newValue.replacingOccurrences(of: "\t", with: "")
-                                focusedField = .qrScan
                             }
                         }
                         .focusBorder(focusedField == .container)
@@ -90,8 +90,8 @@ struct ItemAddView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                     }
-                    .focused($focusedField, equals: .qrScan)
-                    .focusBorder(focusedField == .qrScan)
+                    // No `.focused(...)` — a plain Button can't take keyboard
+                    // focus on iOS. Reachable via Cmd+1 instead.
                 }
 
                 Section("Photo") {
@@ -131,8 +131,7 @@ struct ItemAddView: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .focused($focusedField, equals: .image)
-                    .focusBorder(focusedField == .image)
+                    // Reachable via Cmd+2 — see note on the QR button above.
                     .disabled(isUploadingImage)
                 }
             }
@@ -147,7 +146,6 @@ struct ItemAddView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { save() }
-                        .focused($focusedField, equals: .save)
                         .keyboardShortcut("s", modifiers: .command)
                         .disabled(asset.name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
@@ -187,40 +185,27 @@ struct ItemAddView: View {
             } message: {
                 Text("That code is already linked to another item. Scan a different label.")
             }
-            // Only advances focus for the button-based fields (QR Label ->
-            // Take Photo -> Save) — the text fields (name/description/
-            // container) advance via their own onSubmit/onChange handlers
-            // above. Having both act on the same field was causing a
-            // double-advance race that cascaded focus straight to Save
-            // after a single keystroke.
-            .onKeyPress(.tab) {
-                guard let current = focusedField, current == .qrScan || current == .image else { return .ignored }
-                guard let next = current.next else { return .ignored }
-                focusedField = next
-                return .handled
-            }
-            // Dispatches Enter to whichever button currently has focus.
-            // Stacking multiple `.keyboardShortcut(.defaultAction)`
-            // modifiers doesn't work the way it sounds — SwiftUI resolves
-            // to a single global default action (in practice, the
-            // last-declared one), not "whichever button has focus", so
-            // Enter always fired Take Photo regardless of what was
-            // actually focused. This checks focus explicitly instead.
-            .onKeyPress(.return) {
-                print("↩️ onKeyPress(.return) fired, focusedField = \(String(describing: focusedField))")
-                switch focusedField {
-                case .qrScan:
-                    showScanner = true
-                    return .handled
-                case .image:
-                    showCamera = true
-                    return .handled
-                case .save:
-                    save()
-                    return .handled
-                default:
-                    return .ignored
+            // MARK: Keyboard actions for the button-based fields.
+            //
+            // These were `.onKeyPress(.tab)` / `.onKeyPress(.return)`
+            // handlers switching on `focusedField == .qrScan / .image /
+            // .save`. That can't work: all three are plain-styled Buttons,
+            // which aren't keyboard-focusable on iOS, so `focusedField`
+            // never holds those values — Tab out of Container goes to the
+            // next focusable view (the tag field) and focus nils out.
+            //
+            // Hidden Button + `.keyboardShortcut` works window-wide
+            // regardless of what holds focus — the same mechanism behind
+            // Cmd+F in ItemListView. Save keeps its existing Cmd+S.
+            .background {
+                VStack {
+                    Button("") { showScanner = true }
+                        .keyboardShortcut("1", modifiers: .command)
+                    Button("") { showCamera = true }
+                        .keyboardShortcut("2", modifiers: .command)
+                        .disabled(isUploadingImage)
                 }
+                .opacity(0)
             }
         }
     }

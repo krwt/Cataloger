@@ -162,6 +162,23 @@ struct ItemDetailView: View {
             }
             Button("Cancel", role: .cancel) {}
         }
+        // Same mechanism as ItemAddView: hidden Button + `.keyboardShortcut`
+        // fires window-wide regardless of what currently holds focus, so QR
+        // and Photo are reachable without depending on the focus ring. The
+        // `.focused(...)` bindings below are left in place here (unlike in
+        // ItemAddView) because this view's QR button isn't `.plain`-styled
+        // and does take focus, so Tab-cycling still works — these shortcuts
+        // are an addition, not a replacement.
+        .background {
+            VStack {
+                Button("") { showScanner = true }
+                    .keyboardShortcut("1", modifiers: .command)
+                Button("") { showCamera = true }
+                    .keyboardShortcut("2", modifiers: .command)
+                    .disabled(isUploadingImage)
+            }
+            .opacity(0)
+        }
         // Only advances focus for the button-based fields (QR Label ->
         // Take Photo -> Save) — the text fields advance via their own
         // onSubmit/onChange handlers above, to avoid a double-advance race.

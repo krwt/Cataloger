@@ -64,18 +64,12 @@ struct WidescreenContainer: View {
         .onChange(of: store.selectedAssetIDs) { _, newValue in
             selectedAssetID = newValue.count == 1 ? newValue.first : nil
         }
-        // Hidden Button + .keyboardShortcut instead of .onKeyPress(.escape):
-        // onKeyPress only fires when something within its subtree currently
-        // holds real focus, which nothing here reliably does on iOS.
-        .background(
-            Button("") {
-                if (store.activeSidebarFilter ?? .all) != .all {
-                    store.activeSidebarFilter = .all
-                }
-            }
-            .keyboardShortcut(.escape, modifiers: [])
-            .hidden()
-        )
+        // Escape handling lives in ItemListView, which is present on both
+        // the compact and widescreen paths. There used to be a second,
+        // always-enabled Escape button here for clearing the sidebar filter;
+        // because `.keyboardShortcut` fires window-wide, it swallowed every
+        // Escape press — including ones meant to clear the search field, and
+        // presses where it had nothing to clear at all.
     }
 }
 

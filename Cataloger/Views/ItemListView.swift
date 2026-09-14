@@ -58,13 +58,19 @@ struct ItemListView: View {
                     onFilterTap: { isFilterSheetPresented = true }
                 ).padding(.vertical, 8)
 
+                ScrollViewReader { proxy in
                 List(selection: $store.selectedAssetIDs) {
                     ForEach(Array(store.visibleAssets.enumerated()), id: \.element.id) { index, asset in
                         ZStack {
-                            // Zebra striping: alternating background shade.
-                            (index.isMultiple(of: 2)
-                                ? Color(uiColor: .systemBackground)
-                                : Color.secondary.opacity(0.03))
+                            // Keyboard cursor highlight takes precedence
+                            // over zebra striping — without a visible
+                            // highlight, arrow navigation moved an index
+                            // nothing rendered, so it looked broken.
+                            (index == selectedRowIndex
+                                ? Color.accentColor.opacity(0.18)
+                                : (index.isMultiple(of: 2)
+                                    ? Color(uiColor: .systemBackground)
+                                    : Color.secondary.opacity(0.03)))
 
                             // Plain tap gesture (not Button) so it doesn't
                             // compete with the long-press gesture below for
@@ -123,6 +129,24 @@ struct ItemListView: View {
                     }
                 }
                 .animation(.default, value: store.isRefreshing)
+                // Keeps the keyboard cursor on screen while arrowing past
+                // the visible window.
+                .onChange(of: selectedRowIndex) { _, newValue in
+                    guard let newValue, store.visibleAssets.indices.contains(newValue) else { return }
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        proxy.scrollTo(store.visibleAssets[newValue].id, anchor: .center)
+                    }
+                }
+                // A new result set invalidates the old cursor position —
+                // index 4 of the previous results is meaningless now, and
+                // could point at a different item or past the end.
+                .onChange(of: store.searchText) { _, _ in
+                    selectedRowIndex = nil
+                }
+                .onChange(of: store.activeSidebarFilter) { _, _ in
+                    selectedRowIndex = nil
+                }
+                }
                 .overlay(alignment: .bottom) {
                     // Shown for the WHOLE of select mode, not just at 2+
                     // selected. With the navigation bar hidden this bar owns
@@ -157,6 +181,23 @@ struct ItemListView: View {
             .sheet(isPresented: $isFilterSheetPresented) {
                 FilterSheet()
             }
+            // Clears the detail column when the Add sheet opens.
+            //
+            // A presented sheet shares its focus ring with the views behind
+            // it here, so with a detail view populated, Tab out of the Add
+            // sheet's last field walks straight into the detail view's tag
+            // editor. Emptying the selection removes those focusable views,
+            // which keeps focus inside the sheet where it belongs — and
+            // showing a half-filled detail pane next to a "new item" sheet
+            // was confusing on its own.
+            //
+            // Widescreen only: on iPhone (`onSelect` is nil) there's no
+            // detail column to clear. Skipped in select mode so it can't
+            // wipe a multi-selection out from under the user.
+            .onChange(of: isAddSheetPresented) { _, isPresented in
+                guard isPresented, onSelect != nil, !isSelectMode else { return }
+                store.selectedAssetIDs.removeAll()
+            }
         }
         // MARK: Desktop-class keyboard shortcuts (iPad & Mac hardware keyboard)
         // Uses a hidden Button + .keyboardShortcut rather than .onKeyPress:
@@ -178,25 +219,26 @@ struct ItemListView: View {
                 .disabled(!isSelectMode || isSearchFocused)
                 .hidden()
         )
-        .onKeyPress(.escape) {
-            if isSelectMode {
-                isSelectMode = false
-                store.selectedAssetIDs.removeAll()
-                return .handled
-            }
-            if isSearchFocused {
-                store.searchText = ""
-                isSearchFocused = false
-                return .handled
-            }
-            // Mirrors WidescreenContainer's escape-clears-filter behavior,
-            // so the two paths behave the same on a hardware keyboard.
-            if isFilterActive {
-                store.activeSidebarFilter = .all
-                return .handled
-            }
-            return .ignored
-        }
+        // Escape lives in ONE place, as a hidden Button rather than
+        // `.onKeyPress`.
+        //
+        // `.keyboardShortcut` beats `.onKeyPress` and fires window-wide
+        // regardless of focus. WidescreenContainer had its own always-enabled
+        // Escape button for clearing the sidebar filter, which swallowed
+        // every press — including ones meant to clear the search field, and
+        // including presses where it had nothing to do. Consolidating the
+        // whole precedence chain here removes that conflict.
+        //
+        // Precedence: leave select mode, then clear search, then clear the
+        // sidebar filter — most transient state first.
+        .background(
+            Button("") { handleEscape() }
+                .keyboardShortcut(.escape, modifiers: [])
+                // Only claims Escape when there's actually something to
+                // dismiss, so it can't block other handlers otherwise.
+                .disabled(!hasEscapableState)
+                .hidden()
+        )
         // Arrow keys move the row selection only when the list is actually
         // the active context. These used to return `.handled`
         // unconditionally, which swallowed arrows meant for other views —
@@ -205,21 +247,52 @@ struct ItemListView: View {
         // view's search field), "some other view" includes views inside
         // the Add sheet. Returning `.ignored` lets the event fall through
         // to whoever should actually get it.
+        // Arrows deliberately work WHILE the search field is focused —
+        // type a query, then arrow down through the results without
+        // reaching for the mouse. An earlier `!isSearchFocused` guard here
+        // blocked exactly that, and up/down do nothing useful in a
+        // single-line text field anyway, so claiming them costs nothing.
         .onKeyPress(.upArrow) {
-            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
+            guard !isAddSheetPresented else { return .ignored }
             moveSelection(-1)
             return .handled
         }
         .onKeyPress(.downArrow) {
-            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
+            guard !isAddSheetPresented else { return .ignored }
             moveSelection(1)
             return .handled
         }
         .onKeyPress(.return) {
-            guard !isAddSheetPresented, !isSearchFocused else { return .ignored }
+            guard !isAddSheetPresented else { return .ignored }
             guard let index = selectedRowIndex, store.visibleAssets.indices.contains(index) else { return .ignored }
             selectRow(store.visibleAssets[index].id)
             return .handled
+        }
+    }
+
+    /// Anything Escape could currently act on. Also gates the hidden Escape
+    /// button, so it doesn't consume the key when there's nothing to do.
+    private var hasEscapableState: Bool {
+        isSelectMode || !store.searchText.isEmpty || isFilterActive
+    }
+
+    private func handleEscape() {
+        if isSelectMode {
+            isSelectMode = false
+            store.selectedAssetIDs.removeAll()
+            return
+        }
+        // Keyed off the text being non-empty rather than the field being
+        // focused — Escape should clear a stale query whether or not the
+        // cursor happens to still be in the box.
+        if !store.searchText.isEmpty {
+            store.searchText = ""
+            isSearchFocused = false
+            selectedRowIndex = nil
+            return
+        }
+        if isFilterActive {
+            store.activeSidebarFilter = .all
         }
     }
 
@@ -251,12 +324,30 @@ struct ItemListView: View {
         } else {
             navigationPath.append(assetID)
         }
+        // Keep the keyboard cursor on whatever was just tapped, so arrowing
+        // afterwards continues from there rather than from a stale position.
+        if let index = store.visibleAssets.firstIndex(where: { $0.id == assetID }) {
+            selectedRowIndex = index
+        }
     }
 
     private func moveSelection(_ delta: Int) {
         let count = store.visibleAssets.count
         guard count > 0 else { return }
         let current = selectedRowIndex ?? -1
-        selectedRowIndex = min(max(current + delta, 0), count - 1)
+        let next = min(max(current + delta, 0), count - 1)
+        selectedRowIndex = next
+
+        // On the widescreen layout, mirror the keyboard cursor into the
+        // detail column so arrowing through results previews each one —
+        // `onSelect` is the same closure a tap uses, so the detail pane
+        // updates identically either way. Skipped on iPhone (`onSelect` is
+        // nil there), where the equivalent would be pushing a new screen on
+        // every keypress, and skipped in select mode, where arrows are
+        // moving a cursor through a multi-selection rather than choosing
+        // something to view.
+        if let onSelect, !isSelectMode {
+            onSelect(store.visibleAssets[next].id)
+        }
     }
 }

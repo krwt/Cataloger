@@ -22,7 +22,6 @@ struct MasterSearchBar: View {
     @State private var searchDebounceTask: Task<Void, Never>?
     @State private var showScanner = false
     @State private var showContextMenu = false
-    @State private var showAddSheet = false
     @State private var exportedFileURL: URL?
     @State private var showLegacyImporter = false
     @State private var legacyImportPreview: AppStore.LegacyImportPreview?
@@ -74,6 +73,12 @@ struct MasterSearchBar: View {
                     TextField("Search Items, SKUs, or Tags...", text: $searchDraft)
                         .focused($isSearchFocused)
                         .textFieldStyle(.plain)
+                        // SKUs, QR payloads, and tags aren't dictionary
+                        // words — autocorrect mangles them, and
+                        // autocapitalization breaks matching against tags,
+                        // which are normalized to lowercase.
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
                         .onChange(of: searchDraft) { _, newValue in
                             searchDebounceTask?.cancel()
                             searchDebounceTask = Task {
@@ -82,10 +87,20 @@ struct MasterSearchBar: View {
                                 store.searchText = newValue
                             }
                         }
+                        // Clears the field directly while it has focus.
+                        // ItemListView's Escape handler keys off
+                        // `store.searchText`, which lags the draft by the
+                        // debounce interval — so typing and immediately
+                        // hitting Escape would otherwise fall through to
+                        // clearing the sidebar filter while leaving the
+                        // typed text sitting in the box.
+                        .onKeyPress(.escape) {
+                            guard !searchDraft.isEmpty else { return .ignored }
+                            clearSearch()
+                            return .handled
+                        }
                     Button {
-                        searchDebounceTask?.cancel()
-                        searchDraft = ""
-                        store.searchText = ""
+                        clearSearch()
                     } label: {
                         Image(systemName: "xmark.circle")
                     }
@@ -102,13 +117,27 @@ struct MasterSearchBar: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
 
             Button {
-                showAddSheet = true
+                isAddSheetPresented = true
             } label: {
                 Image(systemName: "plus")
             }
         }
         .padding(.horizontal)
         .onAppear { searchDraft = store.searchText }
+        // Keeps the field in sync when something *else* changes the search
+        // text — the Escape handler in ItemListView, or a QR scan. Without
+        // this the debounced local draft keeps showing stale text after an
+        // external clear: the list updates, the text box doesn't.
+        // During normal typing this is a no-op, since the debounce sets
+        // `store.searchText` to the draft's own value.
+        .onChange(of: store.searchText) { _, newValue in
+            if newValue != searchDraft {
+                // Cancel first — otherwise an in-flight debounce would
+                // re-apply the old text ~150ms later and undo the clear.
+                searchDebounceTask?.cancel()
+                searchDraft = newValue
+            }
+        }
         .sheet(isPresented: $showScanner) {
             QRScannerView(
                 onCode: { code in
@@ -121,7 +150,10 @@ struct MasterSearchBar: View {
             )
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showAddSheet) {
+        // Bound to ItemListView's state rather than a local @State: that
+        // view guards its arrow-key handlers on whether the Add sheet is
+        // open, and a private copy here meant the guard never saw it.
+        .sheet(isPresented: $isAddSheetPresented) {
             ItemAddView(prefillName: store.searchHasNoMatches ? store.searchText : "")
         }
         .fileImporter(isPresented: $showLegacyImporter, allowedContentTypes: [.data]) { result in
@@ -244,6 +276,15 @@ struct MasterSearchBar: View {
                 store.lastError = error.localizedDescription
             }
         }
+    }
+
+    /// Single path for clearing search, so the local draft and the store
+    /// can't fall out of step — and any in-flight debounce is cancelled
+    /// rather than re-applying the old text moments later.
+    private func clearSearch() {
+        searchDebounceTask?.cancel()
+        searchDraft = ""
+        store.searchText = ""
     }
 
     private func closeMenuThen(_ action: @escaping () -> Void) {
