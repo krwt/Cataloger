@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# Xcode — per-user state (window layout, breakpoints, last-open files).
+# Local to one machine and one person; nothing here belongs in the repo.
+xcuserdata/
+*.xcuserstate
+
+# Shared scheme + workspace settings under xcshareddata/ are deliberately
+# NOT ignored — those are meant to be committed so everyone builds the same
+# way. Only the per-user xcuserdata/ counterpart is excluded above.
+
+# Build output
+build/
+DerivedData/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Dependency managers (unused today, harmless if that changes)
+Pods/
+Carthage/Build/
