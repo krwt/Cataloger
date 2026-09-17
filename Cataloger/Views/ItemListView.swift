@@ -210,6 +210,17 @@ struct ItemListView: View {
                 .keyboardShortcut("f", modifiers: .command)
                 .hidden()
         )
+        // Cmd+N mirrors the + button in MasterSearchBar. Same hidden-Button
+        // mechanism as Cmd+F above, for the same reason.
+        .background(
+            Button("") { isAddSheetPresented = true }
+                .keyboardShortcut("n", modifiers: .command)
+                // Nothing to add *into* while the sheet is already up, and
+                // leaving it live would let Cmd+N fire while typing in the
+                // sheet's own fields.
+                .disabled(isAddSheetPresented)
+                .hidden()
+        )
         // Cmd+A selects everything visible, but ONLY in select mode and only
         // when the search field isn't focused — otherwise it would hijack
         // the text field's own select-all while typing.

@@ -138,7 +138,10 @@ struct SidebarView: View {
         List(selection: selectionBinding) {
             SidebarStatsSection(totalCount: store.assets.count, pendingSyncCount: store.pendingSyncCount)
             SidebarViewsSection()
-            SidebarContainersSection(containers: store.allContainers)
+            SidebarContainersSection(
+                containers: store.allContainers,
+                uncontaineredCount: store.uncontaineredCount
+            )
             SidebarTagsSection(tags: store.allTagsWithCounts)
         }
         // Set explicitly rather than relying on the inferred style.
@@ -153,6 +156,7 @@ struct SidebarView: View {
 
 
 private struct SidebarStatsSection: View {
+    @Environment(AppStore.self) private var store
     let totalCount: Int
     let pendingSyncCount: Int
 
@@ -165,6 +169,26 @@ private struct SidebarStatsSection: View {
             } else {
                 LabeledContent("Awaiting Sync", value: "\(pendingSyncCount)")
             }
+
+            // Always offered, not just while something is queued: syncing
+            // also pulls down other devices' changes, so it's still the
+            // right button to press when the queue reads 0.
+            Button {
+                Task { await store.syncNow() }
+            } label: {
+                HStack(spacing: 6) {
+                    if store.isSyncing {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                    }
+                    Text(store.isSyncing ? "Syncing…" : "Sync Now")
+                }
+            }
+            .disabled(store.isSyncing)
+            // A row inside a `List(selection:)` is otherwise treated as a
+            // selectable filter row and picks up the selection highlight.
+            .buttonStyle(.borderless)
         }
     }
 }
@@ -182,14 +206,24 @@ private struct SidebarViewsSection: View {
 
 private struct SidebarContainersSection: View {
     let containers: [String]
+    let uncontaineredCount: Int
     /// Persisted so the sidebar reopens the way you left it rather than
     /// re-expanding a long list on every launch.
     @AppStorage("sidebarContainersExpanded") private var isExpanded = true
 
     var body: some View {
         // Count stays in the header so a collapsed section still tells you
-        // what's inside it.
+        // what's inside it. It counts real containers only — "No Container"
+        // is a filter over items, not a container you've created, so folding
+        // it into that number would overstate how many you have.
         Section("Containers (\(containers.count))", isExpanded: $isExpanded) {
+            // First, not alphabetized in among the rest: these are the items
+            // still needing to be filed, so they're worth landing on.
+            if uncontaineredCount > 0 {
+                Label("No Container (\(uncontaineredCount))", systemImage: "questionmark.folder")
+                    .foregroundStyle(.secondary)
+                    .tag(AppStore.SidebarFilter.noContainer)
+            }
             ForEach(containers, id: \.self) { container in
                 SidebarContainerRow(container: container)
             }

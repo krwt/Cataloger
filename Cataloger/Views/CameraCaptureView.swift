@@ -200,6 +200,7 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
         preview.frame = view.layer.bounds
+        preview.correctRotationForHost(device: device)
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
     }
@@ -388,6 +389,59 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         guard let image = pendingImage, !hasCaptured else { return }
         hasCaptured = true
         onCapture?(image)
+    }
+}
+
+// MARK: - Shared camera helpers
+
+/// Rotation applied to the preview on Mac, in degrees.
+///
+/// Overridable at runtime so the correct value can be found by trying them
+/// rather than guessing:
+///     defaults write com.<bundle-id> CameraPreviewRotation -int 180
+/// Only 0/90/180/270 are meaningful.
+private var macPreviewRotationAngle: CGFloat {
+    let stored = UserDefaults.standard.object(forKey: "CameraPreviewRotation") as? Int
+    return CGFloat(stored ?? 270)
+}
+
+/// True when this build is running on a Mac, where there's no device
+/// rotation for the preview to track in the first place.
+var isRunningOnMac: Bool {
+    ProcessInfo.processInfo.isiOSAppOnMac || ProcessInfo.processInfo.isMacCatalystApp
+}
+
+extension AVCaptureVideoPreviewLayer {
+    /// Corrects preview rotation on Mac.
+    ///
+    /// Gated on the *host* rather than the camera's device type: an earlier
+    /// attempt keyed off `.continuityCamera` / `.external`, and since it
+    /// changed nothing it's unclear whether the angle was already right or
+    /// the branch simply never ran. This version always runs on a Mac and
+    /// logs what it found, so the console settles that question.
+    ///
+    /// Only the preview is touched. The still image path is a separate
+    /// connection and already produces correct output — forcing the two to
+    /// agree is what broke handheld capture previously.
+    func correctRotationForHost(device: AVCaptureDevice) {
+        guard #available(iOS 17.0, *), let connection else { return }
+
+        let supported = [0, 90, 180, 270].filter {
+            connection.isVideoRotationAngleSupported(CGFloat($0))
+        }
+        print("""
+            🔄 Camera: \(device.localizedName) [\(device.deviceType.rawValue)]
+               onMac=\(isRunningOnMac) default=\(connection.videoRotationAngle)° \
+            supported=\(supported) willApply=\(isRunningOnMac ? "\(macPreviewRotationAngle)°" : "unchanged")
+            """)
+
+        guard isRunningOnMac else { return }
+        let angle = macPreviewRotationAngle
+        if connection.isVideoRotationAngleSupported(angle) {
+            connection.videoRotationAngle = angle
+        } else {
+            print("⚠️ Rotation \(angle)° unsupported — preview left as-is")
+        }
     }
 }
 

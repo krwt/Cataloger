@@ -43,6 +43,11 @@ final class AppStore {
         case all
         case checkedOut
         case container(String)
+        /// Items with no container set. `allContainers` skips blanks, so
+        /// without this these items were reachable only by scrolling the
+        /// unfiltered list — which is the opposite of useful, since an
+        /// item with no container is usually one that still needs filing.
+        case noContainer
         case tag(String)
     }
     var activeSidebarFilter: SidebarFilter? = .all
@@ -139,6 +144,8 @@ final class AppStore {
             result = result.filter { $0.isCheckedOut }
         case .container(let name):
             result = result.filter { Asset.normalizedContainerKey($0.containerLocation) == Asset.normalizedContainerKey(name) }
+        case .noContainer:
+            result = result.filter { Asset.normalizedContainerKey($0.containerLocation).isEmpty }
         case .tag(let tag):
             let target = Asset.normalizeTag(tag)
             result = result.filter { asset in asset.tags.contains { Asset.normalizeTag($0) == target } }
@@ -193,6 +200,13 @@ final class AppStore {
             if seen[key] == nil { seen[key] = trimmed }
         }
         return seen.values.sorted()
+    }
+
+    /// How many items have no container set. Drives whether the sidebar's
+    /// "No Container" row appears at all — an always-present row reading
+    /// "(0)" would be noise once everything is filed.
+    var uncontaineredCount: Int {
+        assets.count { Asset.normalizedContainerKey($0.containerLocation).isEmpty }
     }
 
     /// Exact match (case-insensitive, whitespace-trimmed) duplicate-name lookup
@@ -382,6 +396,31 @@ final class AppStore {
         _ = await cloudKit.flushOfflineLedger()
         await applyRemoteChanges()
         await refreshPendingSyncCount()
+    }
+
+    /// Manual "Sync Now" from the sidebar.
+    ///
+    /// Same work as `refreshOnForeground`, but loud instead of quiet: that
+    /// one swallows failures because the user never asked for it, whereas
+    /// here they pressed a button and are owed an answer either way.
+    /// `flushOfflineLedger` returns what's *still* queued afterwards, so a
+    /// non-zero result means the push didn't fully land.
+    func syncNow() async {
+        guard !isSyncing else { return }
+        isSyncing = true
+        syncStatusMessage = "Syncing…"
+        defer { isSyncing = false }
+
+        let stillQueued = await cloudKit.flushOfflineLedger()
+        await applyRemoteChanges()
+        await refreshPendingSyncCount()
+
+        if stillQueued > 0 {
+            syncStatusMessage = ""
+            lastError = "Couldn't reach iCloud — \(stillQueued) change(s) still queued. They'll go up automatically once you're back online."
+        } else {
+            syncStatusMessage = "Synced"
+        }
     }
 
     /// Called from a CloudKit silent push (see `AppDelegate`).
