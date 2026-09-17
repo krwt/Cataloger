@@ -200,7 +200,7 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.videoGravity = .resizeAspectFill
         preview.frame = view.layer.bounds
-        preview.correctRotationForHost(device: device)
+        preview.correctGeometryForHost(device: device)
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
     }
@@ -394,16 +394,14 @@ final class CameraCaptureController: UIViewController, AVCapturePhotoCaptureDele
 
 // MARK: - Shared camera helpers
 
-/// Rotation applied to the preview on Mac, in degrees.
+/// Rotation the Mac preview needs, in degrees.
 ///
-/// Overridable at runtime so the correct value can be found by trying them
-/// rather than guessing:
-///     defaults write com.<bundle-id> CameraPreviewRotation -int 180
-/// Only 0/90/180/270 are meaningful.
-private var macPreviewRotationAngle: CGFloat {
-    let stored = UserDefaults.standard.object(forKey: "CameraPreviewRotation") as? Int
-    return CGFloat(stored ?? 270)
-}
+/// Determined by testing, not derived: the connection's own default leaves
+/// the Continuity Camera feed turned, and 0/90/180 were each wrong in a
+/// different way. There is no orientation signal available here to compute
+/// this from — the Mac has no device orientation, and the phone's gyro
+/// doesn't cross the Continuity link — so it's a fixed correction.
+private let macPreviewRotationAngle: CGFloat = 270
 
 /// True when this build is running on a Mac, where there's no device
 /// rotation for the preview to track in the first place.
@@ -412,36 +410,33 @@ var isRunningOnMac: Bool {
 }
 
 extension AVCaptureVideoPreviewLayer {
-    /// Corrects preview rotation on Mac.
+    /// Fixes preview rotation and mirroring on Mac.
     ///
-    /// Gated on the *host* rather than the camera's device type: an earlier
-    /// attempt keyed off `.continuityCamera` / `.external`, and since it
-    /// changed nothing it's unclear whether the angle was already right or
-    /// the branch simply never ran. This version always runs on a Mac and
-    /// logs what it found, so the console settles that question.
+    /// Gated on the *host*, not the camera's device type — an earlier attempt
+    /// keyed off `.continuityCamera` / `.external` and silently never ran,
+    /// because the camera reports as neither.
     ///
     /// Only the preview is touched. The still image path is a separate
-    /// connection and already produces correct output — forcing the two to
+    /// connection and already produces correct output; forcing the two to
     /// agree is what broke handheld capture previously.
-    func correctRotationForHost(device: AVCaptureDevice) {
-        guard #available(iOS 17.0, *), let connection else { return }
+    func correctGeometryForHost(device: AVCaptureDevice) {
+        guard #available(iOS 17.0, *), isRunningOnMac, let connection else { return }
 
-        let supported = [0, 90, 180, 270].filter {
-            connection.isVideoRotationAngleSupported(CGFloat($0))
+        if connection.isVideoRotationAngleSupported(macPreviewRotationAngle) {
+            connection.videoRotationAngle = macPreviewRotationAngle
         }
-        print("""
-            🔄 Camera: \(device.localizedName) [\(device.deviceType.rawValue)]
-               onMac=\(isRunningOnMac) default=\(connection.videoRotationAngle)° \
-            supported=\(supported) willApply=\(isRunningOnMac ? "\(macPreviewRotationAngle)°" : "unchanged")
-            """)
 
-        guard isRunningOnMac else { return }
-        let angle = macPreviewRotationAngle
-        if connection.isVideoRotationAngleSupported(angle) {
-            connection.videoRotationAngle = angle
-        } else {
-            print("⚠️ Rotation \(angle)° unsupported — preview left as-is")
+        // Continuity Camera previews arrive mirrored, like a selfie view.
+        // That's right for a face and wrong for reading a label or a code,
+        // and it breaks WYSIWYG since the still isn't mirrored.
+        // `automaticallyAdjustsVideoMirroring` has to go first — while it's
+        // on, `isVideoMirrored` is managed by the system and won't stick.
+        if connection.isVideoMirroringSupported {
+            connection.automaticallyAdjustsVideoMirroring = false
+            connection.isVideoMirrored = false
         }
+
+        print("🔄 Preview: \(device.localizedName) → \(connection.videoRotationAngle)°, mirrored=\(connection.isVideoMirrored)")
     }
 }
 

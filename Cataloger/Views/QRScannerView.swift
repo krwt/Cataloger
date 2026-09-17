@@ -163,8 +163,8 @@ final class ScannerViewController: UIViewController, AVCaptureMetadataOutputObje
         let preview = AVCaptureVideoPreviewLayer(session: session)
         preview.frame = view.layer.bounds
         preview.videoGravity = .resizeAspectFill
-        // Shared with CameraCaptureView — see `correctRotationForHost(device:)`.
-        preview.correctRotationForHost(device: device)
+        // Shared with CameraCaptureView — see `correctGeometryForHost(device:)`.
+        preview.correctGeometryForHost(device: device)
         view.layer.insertSublayer(preview, at: 0)
         previewLayer = preview
 
