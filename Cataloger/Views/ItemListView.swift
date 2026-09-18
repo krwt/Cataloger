@@ -194,8 +194,15 @@ struct ItemListView: View {
             // Widescreen only: on iPhone (`onSelect` is nil) there's no
             // detail column to clear. Skipped in select mode so it can't
             // wipe a multi-selection out from under the user.
+            //
+            // The `isEmpty` check isn't redundant: `removeAll()` on an
+            // already-empty set is still a write through `@Observable`'s
+            // setter, so it invalidates this view and re-renders every row
+            // for no change at all. With nothing selected — the common case
+            // — that's a whole list rebuild per presentation.
             .onChange(of: isAddSheetPresented) { _, isPresented in
-                guard isPresented, onSelect != nil, !isSelectMode else { return }
+                guard isPresented, onSelect != nil, !isSelectMode,
+                      !store.selectedAssetIDs.isEmpty else { return }
                 store.selectedAssetIDs.removeAll()
             }
         }
