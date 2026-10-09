@@ -95,6 +95,10 @@ struct MasterSearchBar: View {
                         // clearing the sidebar filter while leaving the
                         // typed text sitting in the box.
                         .onKeyPress(.escape) {
+                            // The field stays in the focus chain while a
+                            // sheet is up, so without this it would steal
+                            // Escape from the image preview on top of it.
+                            guard !store.isImagePreviewPresented else { return .ignored }
                             guard !searchDraft.isEmpty else { return .ignored }
                             clearSearch()
                             return .handled

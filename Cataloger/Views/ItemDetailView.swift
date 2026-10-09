@@ -28,7 +28,6 @@ struct ItemDetailView: View {
     @State private var deleteConfirmArmed = false
     @State private var showCamera = false
     @State private var isUploadingImage = false
-    @State private var showImagePreview = false
 
     var body: some View {
         Form {
@@ -83,7 +82,7 @@ struct ItemDetailView: View {
 
             Section("Photo") {
                 Button {
-                    showImagePreview = true
+                    store.imagePreviewAssetID = asset.id
                 } label: {
                     ThumbnailView(asset: asset)
                         .frame(height: 160)
@@ -125,9 +124,6 @@ struct ItemDetailView: View {
                     .focused($focusedField, equals: .save)
                     .keyboardShortcut("s", modifiers: .command)
             }
-        }
-        .sheet(isPresented: $showImagePreview) {
-            FullScreenImagePreview(asset: asset)
         }
         .sheet(isPresented: $showScanner) {
             QRScannerView(onCode: handleScannedCode, onCancel: { showScanner = false })

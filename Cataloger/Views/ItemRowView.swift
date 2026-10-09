@@ -3,12 +3,13 @@ import SwiftUI
 struct ItemRowView: View {
     let asset: Asset
     @Environment(AppStore.self) private var store
-    @State private var showImagePreview = false
 
     var body: some View {
         HStack(spacing: 12) {
             Button {
-                showImagePreview = true
+                // Presented by ItemListView, so one Escape handler can close
+                // it — see `imagePreviewAssetID`.
+                store.imagePreviewAssetID = asset.id
             } label: {
                 ThumbnailView(asset: asset, allowRemoteLoad: store.preloadAllImages)
                     .frame(width: 48, height: 48)
@@ -57,9 +58,6 @@ struct ItemRowView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
-        .sheet(isPresented: $showImagePreview) {
-            FullScreenImagePreview(asset: asset)
-        }
     }
 }
 
@@ -170,6 +168,7 @@ struct ThumbnailView: View {
 struct FullScreenImagePreview: View {
     let asset: Asset
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppStore.self) private var store
 
     /// Which copy is being displayed. The two are encoded differently —
     /// local is HEIC at 0.8, Imgur is JPEG at 0.8 — so they don't look
@@ -235,6 +234,9 @@ struct FullScreenImagePreview: View {
                 }
             }
         }
+        // Covers dismissal routes this view doesn't drive itself — the ✕
+        // calls `dismiss()`, and the sheet can also be swiped away.
+        .onDisappear { store.imagePreviewAssetID = nil }
         .task {
             hasLocalCopy = await ImageStore.hasLocalCopy(assetID: asset.id)
             // Nothing on Imgur — start on the copy that exists rather than

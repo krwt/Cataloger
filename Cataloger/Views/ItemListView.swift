@@ -8,6 +8,8 @@ struct ItemListView: View {
     @State private var isSelectMode = false
     @State private var isAddSheetPresented = false
     @State private var isFilterSheetPresented = false
+    /// Bumped each time the image preview closes, to drive `KeyFocusRestorer`.
+    @State private var focusReclaimToken = 0
 
     /// True when the sidebar taxonomy isn't reachable any other way — i.e.
     /// the compact/iPhone path, where this view is rendered standalone
@@ -181,6 +183,29 @@ struct ItemListView: View {
             .sheet(isPresented: $isFilterSheetPresented) {
                 FilterSheet()
             }
+            // Presented here, not in ItemRowView/ItemDetailView, so the
+            // Escape button below — which never leaves the view tree — can
+            // close it. The preview owning its own Escape shortcut was what
+            // broke the key for everything after it.
+            //
+            // `.sheet(item:)` rather than `isPresented` + `if let`: a sheet
+            // closure that opens with a conditional doesn't inherit the
+            // environment, so `FullScreenImagePreview`'s `@Environment`
+            // lookup for AppStore trapped at runtime. Resolving the asset in
+            // the binding keeps the closure unconditional. `.environment` is
+            // passed explicitly too, matching what ContextMenuPanel already
+            // does for its popover.
+            .sheet(item: Binding(
+                get: {
+                    store.imagePreviewAssetID.flatMap { id in
+                        store.assets.first { $0.id == id }
+                    }
+                },
+                set: { if $0 == nil { store.imagePreviewAssetID = nil } }
+            )) { asset in
+                FullScreenImagePreview(asset: asset)
+                    .environment(store)
+            }
             // Clears the detail column when the Add sheet opens.
             //
             // A presented sheet shares its focus ring with the views behind
@@ -257,6 +282,17 @@ struct ItemListView: View {
                 .disabled(!hasEscapableState)
                 .hidden()
         )
+        // Takes first responder back after the preview's sheet tears down —
+        // without it the Escape button above is registered but unreachable.
+        .background(
+            KeyFocusRestorer(token: focusReclaimToken)
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        )
+        .onChange(of: store.isImagePreviewPresented) { _, isPresented in
+            guard !isPresented else { return }
+            focusReclaimToken += 1
+        }
         // Arrow keys move the row selection only when the list is actually
         // the active context. These used to return `.handled`
         // unconditionally, which swallowed arrows meant for other views —
@@ -291,13 +327,33 @@ struct ItemListView: View {
     /// Anything Escape could currently act on. Also gates the hidden Escape
     /// button, so it doesn't consume the key when there's nothing to do.
     private var hasEscapableState: Bool {
-        isSelectMode || !store.searchText.isEmpty || isFilterActive
+        store.isImagePreviewPresented || isSelectMode
+            || isFilterActive || !store.searchText.isEmpty
     }
 
+    /// Precedence: image preview, select mode, sidebar filter, search text.
+    ///
+    /// All of it lives in this one function, on a button that's always in
+    /// the view tree. The preview used to dismiss itself via its own
+    /// `.keyboardShortcut`, which worked once and then left Escape routed to
+    /// nothing, because the button handling the key was destroyed by the
+    /// dismissal it triggered.
+    ///
+    /// Filter deliberately comes before search: with both active, Escape
+    /// should widen what's on screen one step at a time, and the filter is
+    /// the coarser of the two.
     private func handleEscape() {
+        if store.isImagePreviewPresented {
+            store.imagePreviewAssetID = nil
+            return
+        }
         if isSelectMode {
             isSelectMode = false
             store.selectedAssetIDs.removeAll()
+            return
+        }
+        if isFilterActive {
+            store.activeSidebarFilter = .all
             return
         }
         // Keyed off the text being non-empty rather than the field being
@@ -307,10 +363,6 @@ struct ItemListView: View {
             store.searchText = ""
             isSearchFocused = false
             selectedRowIndex = nil
-            return
-        }
-        if isFilterActive {
-            store.activeSidebarFilter = .all
         }
     }
 
@@ -367,5 +419,48 @@ struct ItemListView: View {
         if let onSelect, !isSelectMode {
             onSelect(store.visibleAssets[next].id)
         }
+    }
+}
+
+/// Reclaims first responder for the main window.
+///
+/// Dismissing a sheet on iOS-on-Mac doesn't hand first responder back to the
+/// presenter. `.keyboardShortcut` then reaches nothing — Escape produces the
+/// system beep and stops clearing the search or filter until something in the
+/// list is clicked, which is what restores the chain manually.
+///
+/// SwiftUI gives no way to ask for first responder directly, so this wraps a
+/// UIView that can take it. `token` is a change counter rather than a Bool:
+/// the reclaim has to fire on every dismissal, and a Bool that's already
+/// `true` wouldn't re-trigger `updateUIView`.
+struct KeyFocusRestorer: UIViewRepresentable {
+    var token: Int
+
+    func makeUIView(context: Context) -> UIView {
+        context.coordinator.lastToken = token
+        let view = FocusClaimingView()
+        view.isUserInteractionEnabled = false
+        return view
+    }
+
+    func updateUIView(_ view: UIView, context: Context) {
+        guard token != context.coordinator.lastToken else { return }
+        context.coordinator.lastToken = token
+        // Deferred: at the moment the binding changes, the sheet is still
+        // tearing down and the window won't hand over first responder yet.
+        DispatchQueue.main.async {
+            guard view.window != nil, !view.isFirstResponder else { return }
+            view.becomeFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    final class Coordinator {
+        var lastToken = 0
+    }
+
+    private final class FocusClaimingView: UIView {
+        override var canBecomeFirstResponder: Bool { true }
     }
 }

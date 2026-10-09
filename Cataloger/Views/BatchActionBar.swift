@@ -26,6 +26,22 @@ struct BatchActionBar: View {
     /// reachable) even at zero selected.
     private var hasSelection: Bool { !selectedIDs.isEmpty }
 
+    /// Shared by the Move button and the field's own Return key.
+    ///
+    /// Trimmed before saving so " a1 " doesn't become a container distinct
+    /// from "a1" — `normalizedContainerKey` treats them as one for filtering,
+    /// but what's stored on the asset is the raw string, and `allContainers`
+    /// shows the first-seen casing.
+    private func applyMove() {
+        let target = moveTarget.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty else { return }
+        Task {
+            await store.batchMove(ids: selectedIDs, toContainer: target)
+            showMoveSheet = false
+            moveTarget = ""
+        }
+    }
+
     var body: some View {
         VStack(spacing: 10) {
             HStack {
@@ -63,13 +79,36 @@ struct BatchActionBar: View {
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .shadow(radius: 4)
         .padding()
-        .confirmationDialog("Move \(selectedIDs.count) items?", isPresented: $showMoveSheet, titleVisibility: .visible) {
-            ForEach(store.allContainers, id: \.self) { container in
-                Button(container) {
-                    Task { await store.batchMove(ids: selectedIDs, toContainer: container) }
+        // A typed field rather than a button-per-container confirmation
+        // dialog. The dialog listed every known container as a full-width
+        // row — unusable once there are more than a handful — and could only
+        // ever offer containers that already exist, so moving items into a
+        // new one wasn't possible here at all.
+        .sheet(isPresented: $showMoveSheet) {
+            NavigationStack {
+                Form {
+                    TextField("Container", text: $moveTarget)
+                        // Containers are short codes like "A1"; autocorrect
+                        // and autocapitalization both mangle them, and
+                        // matching is case-insensitive anyway.
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .onSubmit(applyMove)
+                }
+                .navigationTitle("Move \(selectedIDs.count) items")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showMoveSheet = false
+                            moveTarget = ""
+                        }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Move", action: applyMove)
+                            .disabled(moveTarget.trimmingCharacters(in: .whitespaces).isEmpty)
+                    }
                 }
             }
-            Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showTagSheet) {
             NavigationStack {

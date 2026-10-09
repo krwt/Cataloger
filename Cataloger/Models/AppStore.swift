@@ -52,6 +52,19 @@ final class AppStore {
     }
     var activeSidebarFilter: SidebarFilter? = .all
 
+    /// The asset whose photo is open in the full-screen preview, if any.
+    ///
+    /// Held here rather than in per-row `@State` so that `ItemListView`'s
+    /// single Escape handler can close it. When the preview owned its own
+    /// `.keyboardShortcut(.escape)`, dismissing with the key destroyed the
+    /// very button that had just handled it, and SwiftUI stopped routing
+    /// Escape to anything afterwards — the key beeped until something was
+    /// clicked. Dismissing with the ✕ was unaffected, which is what pinned
+    /// the cause to the vanishing shortcut rather than to sheet teardown.
+    var imagePreviewAssetID: String?
+
+    var isImagePreviewPresented: Bool { imagePreviewAssetID != nil }
+
     private let cloudKit = CloudKitManager(containerIdentifier: "iCloud.Cataloger")
     private var exportDirectory: URL {
         get throws {
